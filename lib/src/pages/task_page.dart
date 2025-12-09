@@ -208,69 +208,76 @@ class _TaskPageState extends State<TaskPage> {
                       padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
                       itemCount: _tasks.length,
                       itemBuilder: (context, index) {
-                        final task = _tasks[index];
-                        return Dismissible(
-                          key: ValueKey(task['id']),
-                          direction: DismissDirection.horizontal,
-                          background:
-                              _buildEditBackground(), // swipe → (right) = edit
-                          secondaryBackground:
-                              _buildDeleteBackground(), // swipe ← (left) = delete
+                        final task = _tasks[index] as Map<String, dynamic>;
+                        final taskId = task['id'];
 
+                        return Dismissible(
+                          // key for the whole row – tied to task id, not index
+                          key: ValueKey('task_row_$taskId'),
+                          direction: DismissDirection.horizontal,
+                          background: _buildEditBackground(),
+                          secondaryBackground: _buildDeleteBackground(),
+
+                          // Only decide IF we should dismiss
                           confirmDismiss: (direction) async {
                             if (direction == DismissDirection.startToEnd) {
-                              // 👉 Swipe RIGHT: open edit modal, do NOT delete
+                              // 👉 Swipe RIGHT: edit only, do NOT dismiss
                               await _openEditTaskModal(task, index);
-                              return false; // keep the card
-                            } else if (direction ==
-                                DismissDirection.endToStart) {
-                              // 👈 Swipe LEFT: delete
+                              return false;
+                            }
+
+                            if (direction == DismissDirection.endToStart) {
+                              // 👈 Swipe LEFT: ask confirmation; actual delete in onDismissed
                               final shouldDelete = await _confirmDelete(
                                 context,
                               );
-                              if (!shouldDelete) return false;
-
-                              // delete from Supabase
-                              try {
-                                await _supabase
-                                    .from('tasks')
-                                    .delete()
-                                    .eq('id', task['id']);
-
-                                // remove from local list
-                                setState(() {
-                                  _tasks.removeAt(index);
-                                });
-                              } catch (e) {
-                                if (mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text(
-                                        'Failed to delete task: $e',
-                                      ),
-                                    ),
-                                  );
-                                }
-                                return false;
-                              }
-
-                              return true; // let Dismissible animate the removal
+                              return shouldDelete;
                             }
+
                             return false;
                           },
 
+                          // 🔥 The actual delete (exactly once)
+                          onDismissed: (direction) async {
+                            try {
+                              await _supabase
+                                  .from('tasks')
+                                  .delete()
+                                  .eq('id', taskId);
+                            } catch (e) {
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Failed to delete task: $e'),
+                                  ),
+                                );
+                              }
+                            }
+
+                            if (mounted) {
+                              setState(() {
+                                _tasks.removeWhere((t) => t['id'] == taskId);
+                              });
+                            }
+                          },
+
                           child: TaskCard(
-                            key: ValueKey(task['id']),
+                            // ❗ remove key here to avoid double-key confusion
                             task: task,
                             onTaskUpdated: (updatedTask) {
                               setState(() {
-                                _tasks[index] = updatedTask;
+                                final updatedId = updatedTask['id'];
+                                final idx = _tasks.indexWhere(
+                                  (t) => t['id'] == updatedId,
+                                );
+                                if (idx != -1) {
+                                  _tasks[idx] = updatedTask;
+                                }
                               });
                             },
-                            // delete is now handled by swipe, so this can be a no-op or left as-is
                             onTaskDeleted: () {
                               setState(() {
-                                _tasks.removeAt(index);
+                                _tasks.removeWhere((t) => t['id'] == taskId);
                               });
                             },
                             onTaskCopied: (newTask) {
@@ -637,13 +644,17 @@ class TaskCard extends StatefulWidget {
   State<TaskCard> createState() => _TaskCardState();
 }
 
-class _TaskCardState extends State<TaskCard> {
+class _TaskCardState extends State<TaskCard>
+    with AutomaticKeepAliveClientMixin {
   late Map<String, dynamic> _task;
   late Duration _elapsed;
   Timer? _timer;
   bool _isRunning = false;
 
   DateTime? _lastTickTime;
+
+  @override
+  bool get wantKeepAlive => true;
 
   final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -665,20 +676,30 @@ class _TaskCardState extends State<TaskCard> {
   @override
   void didUpdateWidget(covariant TaskCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!_isRunning && oldWidget.task != widget.task) {
-      setState(() {
-        _task = Map<String, dynamic>.from(widget.task);
 
-        // Again, treat the stored value as seconds
-        final spentSeconds = (_task['total_spent_minutes'] ?? 0) as int;
-        _elapsed = Duration(seconds: spentSeconds);
-      });
+    // Always keep latest data from parent
+    _task = Map<String, dynamic>.from(widget.task);
+
+    // If this card switched to a DIFFERENT task (id changed), re-init fully
+    if (widget.task['id'] != oldWidget.task['id']) {
+      final spentSeconds = _task['total_spent_minutes'] as int? ?? 0;
+      _elapsed = Duration(seconds: spentSeconds);
+      _isRunning = _task['status'] == 'active';
+      return;
+    }
+
+    // Same task, parent may have updated it (e.g. status changed elsewhere)
+    // 👉 DO NOT override elapsed time if timer is currently running
+    if (!_isRunning) {
+      final spentSeconds = _task['total_spent_minutes'] as int? ?? 0;
+      _elapsed = Duration(seconds: spentSeconds);
+      _isRunning = _task['status'] == 'active';
     }
   }
 
   @override
   void dispose() {
-    _timer?.cancel();
+    // _timer?.cancel();
     _autoPauseAndSave();
     super.dispose();
   }
@@ -843,12 +864,27 @@ class _TaskCardState extends State<TaskCard> {
     }
   }
 
-  Future<void> _copyToNextDay() async {
+  Future<void> _copyToDate() async {
     try {
-      final startDateStr = _task['start_date'] as String;
-      final startDate = DateTime.parse(startDateStr);
-      final nextDate = startDate.add(const Duration(days: 1));
-      final nextDateStr = DateFormat('yyyy-MM-dd').format(nextDate);
+      // Use current task's start date as initial date if available
+      DateTime initialDate;
+      final startDateStr = _task['start_date'] as String?;
+      if (startDateStr != null) {
+        initialDate = DateTime.tryParse(startDateStr) ?? DateTime.now();
+      } else {
+        initialDate = DateTime.now();
+      }
+
+      // 📅 Ask user which date to copy to
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: initialDate,
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100),
+      );
+      if (picked == null) return; // user cancelled
+
+      final targetDateStr = DateFormat('yyyy-MM-dd').format(picked);
 
       final payload = {
         'user_id': _task['user_id'],
@@ -856,8 +892,8 @@ class _TaskCardState extends State<TaskCard> {
         'description': _task['description'],
         'label': _task['label'],
         'estimated_minutes': _task['estimated_minutes'],
-        'start_date': nextDateStr,
-        'end_date': nextDateStr,
+        'start_date': targetDateStr,
+        'end_date': targetDateStr,
         'status': 'pending',
         'total_spent_minutes': 0,
       };
@@ -874,7 +910,7 @@ class _TaskCardState extends State<TaskCard> {
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Task copied to next day')));
+      ).showSnackBar(SnackBar(content: Text('Task copied to $targetDateStr')));
     } on SocketException {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -910,8 +946,101 @@ class _TaskCardState extends State<TaskCard> {
     }
   }
 
+  Future<void> _editSpentTime() async {
+    // If it's running, safer to ask user to pause first
+    if (_isRunning) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please pause the task before editing spent time.'),
+        ),
+      );
+      return;
+    }
+
+    final currentMinutes = _elapsed.inMinutes;
+    final controller = TextEditingController(
+      text: currentMinutes > 0 ? currentMinutes.toString() : '',
+    );
+
+    final editedMinutes = await showDialog<int>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Edit spent time'),
+        content: TextField(
+          controller: controller,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Spent time (minutes)',
+            hintText: 'e.g. 45',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final raw = controller.text.trim();
+              final value = int.tryParse(raw);
+              // If invalid, just close without applying
+              if (value == null || value < 0) {
+                Navigator.of(ctx).pop();
+              } else {
+                Navigator.of(ctx).pop(value);
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+
+    if (editedMinutes == null) return; // user cancelled
+
+    final spentSeconds = editedMinutes * 60;
+
+    try {
+      // Update local state first
+      setState(() {
+        _elapsed = Duration(seconds: spentSeconds);
+      });
+
+      // Save to Supabase (still using this column as "seconds")
+      final res = await _supabase
+          .from('tasks')
+          .update({'total_spent_minutes': spentSeconds})
+          .eq('id', _task['id'])
+          .select()
+          .single();
+
+      setState(() {
+        _task = Map<String, dynamic>.from(res as Map);
+      });
+
+      widget.onTaskUpdated(_task);
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Spent time updated')));
+    } on SocketException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No internet. Try again later.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to update spent time: $e')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final title = _task['title'] ?? '';
     final description = (_task['description'] ?? '').toString();
     final label = _task['label'] ?? '';
@@ -1024,9 +1153,21 @@ class _TaskCardState extends State<TaskCard> {
           Row(
             children: [
               Expanded(
-                child: Text(
-                  'Spent: ${_formatDuration(_elapsed)}',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                child: InkWell(
+                  onTap: _editSpentTime,
+                  borderRadius: BorderRadius.circular(8),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      'Spent: ${_formatDuration(_elapsed)}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                        decoration:
+                            TextDecoration.none, // optional hint it's tappable
+                      ),
+                    ),
+                  ),
                 ),
               ),
               IconButton(
@@ -1048,7 +1189,7 @@ class _TaskCardState extends State<TaskCard> {
               ),
               IconButton(
                 tooltip: 'Copy to next day',
-                onPressed: _copyToNextDay,
+                onPressed: _copyToDate,
                 icon: const Icon(
                   Icons.copy_all_outlined,
                   color: Colors.deepPurple,

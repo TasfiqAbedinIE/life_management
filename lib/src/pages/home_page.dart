@@ -276,87 +276,93 @@ class _HomePageState extends State<HomePage> {
 
             // Main content – rounded white container
             Expanded(
-              child: Container(
-                decoration: const BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                ),
-                child: ListView(
-                  padding: const EdgeInsets.all(20),
-                  children: [
-                    _quotes.isEmpty
-                        ? _skeletonCard(height: 140)
-                        : GestureDetector(
-                            onTap: () {
-                              if (_quotes.isEmpty) return;
-                              setState(() {
-                                _advanceQuote(); // 👆 tap = go to next
-                              });
-                            },
-                            child: _QuoteCard(
-                              quote: _quotes[_currentQuoteIndex],
-                            ),
-                          ),
-
-                    const SizedBox(height: 16),
-
-                    _actionDivider(),
-                    _actionsSection(),
-                    const SizedBox(height: 16),
-
-                    // LAST 7 DAYS EFFICIENCY CARD + WEEKLY GRAPH
-                    FutureBuilder<_EfficiencySummary>(
-                      future: _efficiencyFuture,
-                      builder: (context, snapshot) {
-                        if (snapshot.connectionState ==
-                            ConnectionState.waiting) {
-                          return _skeletonCard(height: 200);
-                        }
-
-                        if (snapshot.hasError) {
-                          return _errorCard(
-                            title: 'Could not load efficiency',
-                            message: snapshot.error.toString(),
-                            onRetry: () => setState(() {
-                              _efficiencyFuture = _fetchEfficiencySummary(
-                                _selectedLabel,
-                              );
-                            }),
-                          );
-                        }
-
-                        final summary = snapshot.data!;
-                        if (!summary.hasActivityHours) {
-                          return _infoCard(
-                            title: 'Set your activity hours',
-                            message:
-                                'Go to Settings → Focus Hours to set your daily activity hours. Once you save it, your efficiency for the last week will appear here.',
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => const SettingsPage(),
-                                ),
-                              );
-                            },
-                          );
-                        }
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            _labelFilterChips(),
-                            const SizedBox(height: 12),
-                            _EfficiencyCard(
-                              summary: summary,
-                              selectedLabel: _selectedLabel,
-                            ),
-                          ],
-                        );
-                      },
+              child: RefreshIndicator(
+                onRefresh: _onRefreshDashboard,
+                child: Container(
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(24),
                     ),
+                  ),
+                  child: ListView(
+                    padding: const EdgeInsets.all(20),
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    children: [
+                      _quotes.isEmpty
+                          ? _skeletonCard(height: 140)
+                          : GestureDetector(
+                              onTap: () {
+                                if (_quotes.isEmpty) return;
+                                setState(() {
+                                  _advanceQuote(); // 👆 tap = go to next
+                                });
+                              },
+                              child: _QuoteCard(
+                                quote: _quotes[_currentQuoteIndex],
+                              ),
+                            ),
 
-                    const SizedBox(height: 24),
-                  ],
+                      const SizedBox(height: 16),
+
+                      _actionDivider(),
+                      _actionsSection(),
+                      const SizedBox(height: 16),
+
+                      // LAST 7 DAYS EFFICIENCY CARD + WEEKLY GRAPH
+                      FutureBuilder<_EfficiencySummary>(
+                        future: _efficiencyFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return _skeletonCard(height: 200);
+                          }
+
+                          if (snapshot.hasError) {
+                            return _errorCard(
+                              title: 'Could not load efficiency',
+                              message: snapshot.error.toString(),
+                              onRetry: () => setState(() {
+                                _efficiencyFuture = _fetchEfficiencySummary(
+                                  _selectedLabel,
+                                );
+                              }),
+                            );
+                          }
+
+                          final summary = snapshot.data!;
+                          if (!summary.hasActivityHours) {
+                            return _infoCard(
+                              title: 'Set your activity hours',
+                              message:
+                                  'Go to Settings → Focus Hours to set your daily activity hours. Once you save it, your efficiency for the last week will appear here.',
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const SettingsPage(),
+                                  ),
+                                );
+                              },
+                            );
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _labelFilterChips(),
+                              const SizedBox(height: 12),
+                              _EfficiencyCard(
+                                summary: summary,
+                                selectedLabel: _selectedLabel,
+                              ),
+                            ],
+                          );
+                        },
+                      ),
+
+                      const SizedBox(height: 24),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -364,6 +370,23 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
+  }
+
+  Future<void> _onRefreshDashboard() async {
+    // Re-fetch quotes from Supabase
+    await _fetchAllQuotes();
+
+    if (!mounted) return;
+
+    setState(() {
+      if (_quotes.isNotEmpty) {
+        _quotes.shuffle(); // keep it random
+        _currentQuoteIndex = 0;
+      }
+
+      // Rebuild efficiency chart (it will fetch fresh data from Supabase)
+      _efficiencyFuture = _fetchEfficiencySummary(_selectedLabel);
+    });
   }
 
   Widget _quickActionsRow() {

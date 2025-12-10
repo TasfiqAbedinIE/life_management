@@ -8,6 +8,7 @@ import 'dart:async';
 
 import 'shopping_list_home_page.dart';
 import '../coupled/coupled_request_page.dart';
+import '../habits/presentation/habits_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -390,8 +391,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _quickActionsRow() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return Wrap(
+      alignment: WrapAlignment.start,
+      spacing: 28,
+      runSpacing: 8,
       children: [
         _MinimalActionButton(
           icon: Image.asset("assets/icon/tasks_icon.png", fit: BoxFit.contain),
@@ -424,6 +427,15 @@ class _HomePageState extends State<HomePage> {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const ShoppingListHomePage()),
             );
+          },
+        ),
+        _MinimalActionButton(
+          icon: Image.asset("assets/icon/habits.png", fit: BoxFit.contain),
+          label: "Habits",
+          onTap: () {
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const HabitsPage()));
           },
         ),
         _MinimalActionButton(

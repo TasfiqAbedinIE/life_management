@@ -5,6 +5,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'src/pages/home_page.dart';
 import 'src/pages/sign_in_page.dart';
 import 'src/theme/app_theme.dart';
+import 'src/bootstrap/settings_bootstrap.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -38,7 +39,7 @@ class TaskApp extends StatelessWidget {
               theme: AppTheme.lightTheme(font),
               darkTheme: AppTheme.darkTheme(font),
               themeMode: mode,
-              home: const AuthGate(),
+              home: SettingsBootstrap(child: const AuthGate()),
             );
           },
         );

@@ -8,11 +8,20 @@ class HabitRepository {
 
   HabitRepository(this.client);
 
+  // --- helpers ---
+  String _dateKey(DateTime dt) =>
+      '${dt.year.toString().padLeft(4, '0')}-'
+      '${dt.month.toString().padLeft(2, '0')}-'
+      '${dt.day.toString().padLeft(2, '0')}';
+
+  String _todayKey() => _dateKey(DateTime.now());
+
+  // --- habits ---
   Future<List<Habit>> fetchHabits() async {
     final data = await client
         .from('habits')
         .select('*')
-        .isFilter('archived_at', null)
+        .isFilter('archived_at', null) // or .eq('archived_at', null)
         .order('created_at');
 
     return (data as List)
@@ -20,7 +29,6 @@ class HabitRepository {
         .toList();
   }
 
-  // 🔹 UPDATED: remove userId param, get from auth.currentUser
   Future<Habit> createHabit({
     required String name,
     required int frequencyPerDay,
@@ -43,6 +51,25 @@ class HabitRepository {
         .insert(insertMap)
         .select()
         .single();
+    return Habit.fromMap(data as Map<String, dynamic>);
+  }
+
+  Future<Habit> updateHabit({
+    required String habitId,
+    required String name,
+    required int frequencyPerDay,
+    String? colorHex,
+  }) async {
+    final data = await client
+        .from('habits')
+        .update({
+          'name': name,
+          'frequency_per_day': frequencyPerDay,
+          'color_hex': colorHex,
+        })
+        .eq('id', habitId)
+        .select()
+        .single();
 
     return Habit.fromMap(data as Map<String, dynamic>);
   }
@@ -54,7 +81,13 @@ class HabitRepository {
         .eq('id', habitId);
   }
 
-  /// Fetch entries for last [days] days for a habit
+  /// HARD delete habit
+  /// ✅ habit_entries will delete automatically if your FK has ON DELETE CASCADE
+  Future<void> deleteHabit(String habitId) async {
+    await client.from('habits').delete().eq('id', habitId);
+  }
+
+  // --- entries ---
   Future<List<HabitEntry>> fetchEntriesForHabit({
     required String habitId,
     int days = 30,
@@ -66,14 +99,13 @@ class HabitRepository {
       now.day,
     ).subtract(Duration(days: days - 1));
 
-    // (Optional nicety) Use only the date part for a DATE column:
-    final fromDateStr = from.toIso8601String().substring(0, 10);
+    final fromDateStr = _dateKey(from);
 
     final data = await client
         .from('habit_entries')
         .select('*')
         .eq('habit_id', habitId)
-        .gte('entry_date', fromDateStr)
+        .gte('entry_date', fromDateStr) // entry_date is DATE
         .order('entry_date');
 
     return (data as List)
@@ -81,48 +113,91 @@ class HabitRepository {
         .toList();
   }
 
-  /// Toggle today's completion:
-  /// if already done (>= frequencyPerDay) → reset to 0
-  /// else → set done_count = frequencyPerDay
-  Future<void> toggleToday({required Habit habit}) async {
-    final today = DateTime.now();
-    final dateOnly = DateTime(today.year, today.month, today.day);
-
-    // DATE column → keep only 'YYYY-MM-DD'
-    final dateStr = dateOnly.toIso8601String().substring(0, 10);
-
-    // Get existing entry for today
+  Future<int> getTodayDoneCount(String habitId) async {
     final existing = await client
         .from('habit_entries')
-        .select('*')
-        .eq('habit_id', habit.id)
-        .eq('entry_date', dateStr)
+        .select('done_count')
+        .eq('habit_id', habitId)
+        .eq('entry_date', _todayKey())
         .maybeSingle();
 
-    int newDoneCount;
-    if (existing != null) {
-      final currentCount = existing['done_count'] as int? ?? 0;
-      if (currentCount >= habit.frequencyPerDay) {
-        newDoneCount = 0;
-      } else {
-        newDoneCount = habit.frequencyPerDay;
-      }
-    } else {
-      newDoneCount = habit.frequencyPerDay;
-    }
+    return (existing?['done_count'] as int?) ?? 0;
+  }
 
-    // If resetting to 0, we can delete the row for cleanliness
-    if (newDoneCount == 0 && existing != null) {
+  /// Set today's done_count to exact value (0..frequencyPerDay)
+  Future<void> setTodayDoneCount({
+    required Habit habit,
+    required int newCount,
+  }) async {
+    final clamped = newCount.clamp(0, habit.frequencyPerDay);
+    final today = _todayKey();
+
+    if (clamped == 0) {
+      // Clean delete if 0
       await client
           .from('habit_entries')
           .delete()
-          .eq('id', existing['id'] as String);
-    } else {
-      await client.from('habit_entries').upsert({
-        'habit_id': habit.id,
-        'entry_date': dateStr,
-        'done_count': newDoneCount,
-      }, onConflict: 'habit_id,entry_date');
+          .eq('habit_id', habit.id)
+          .eq('entry_date', today);
+      return;
     }
+
+    await client.from('habit_entries').upsert({
+      'habit_id': habit.id,
+      'entry_date': today,
+      'done_count': clamped,
+    }, onConflict: 'habit_id,entry_date');
+  }
+
+  Future<void> incrementToday({required Habit habit}) async {
+    final current = await getTodayDoneCount(habit.id);
+    await setTodayDoneCount(habit: habit, newCount: current + 1);
+  }
+
+  Future<void> decrementToday({required Habit habit}) async {
+    final current = await getTodayDoneCount(habit.id);
+    await setTodayDoneCount(habit: habit, newCount: current - 1);
+  }
+
+  /// Optional: quick full-done toggle (100% or reset)
+  Future<void> toggleTodayFull({required Habit habit}) async {
+    final current = await getTodayDoneCount(habit.id);
+    final isFull = current >= habit.frequencyPerDay;
+    await setTodayDoneCount(
+      habit: habit,
+      newCount: isFull ? 0 : habit.frequencyPerDay,
+    );
+  }
+
+  Future<Map<String, List<HabitEntry>>> fetchEntriesForHabits({
+    required List<String> habitIds,
+    int days = 30,
+  }) async {
+    if (habitIds.isEmpty) return {};
+
+    final now = DateTime.now();
+    final from = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: days - 1));
+    final fromDateStr =
+        '${from.year.toString().padLeft(4, '0')}-'
+        '${from.month.toString().padLeft(2, '0')}-'
+        '${from.day.toString().padLeft(2, '0')}';
+
+    final data = await client
+        .from('habit_entries')
+        .select('*')
+        .inFilter('habit_id', habitIds) // ✅ supabase-flutter v2
+        .gte('entry_date', fromDateStr)
+        .order('entry_date');
+
+    final map = <String, List<HabitEntry>>{};
+    for (final row in (data as List)) {
+      final entry = HabitEntry.fromMap(row as Map<String, dynamic>);
+      (map[entry.habitId] ??= []).add(entry);
+    }
+    return map;
   }
 }

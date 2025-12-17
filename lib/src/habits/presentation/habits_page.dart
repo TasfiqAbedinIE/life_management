@@ -31,44 +31,106 @@ class _HabitsPageState extends State<HabitsPage> {
 
   Future<void> _loadHabits() async {
     setState(() => _loading = true);
+
     try {
       final habits = await _repo.fetchHabits();
+
+      // ✅ batch load entries for all habits so cards show correct 0/freq immediately
+      final ids = habits.map((h) => h.id).toList();
+      final entriesMap = await _repo.fetchEntriesForHabits(habitIds: ids);
+
       setState(() {
         _habits = habits;
+        _entries
+          ..clear()
+          ..addAll(entriesMap);
       });
     } finally {
       setState(() => _loading = false);
     }
   }
 
-  Future<void> _onToggleToday(Habit habit) async {
-    await _repo.toggleToday(habit: habit);
-    // For a simple UI, just reload entries for that habit if expanded
-    if (_expandedHabits.contains(habit.id)) {
-      final entries = await _repo.fetchEntriesForHabit(habitId: habit.id);
-      setState(() {
-        _entries[habit.id] = entries;
-      });
-    } else {
-      setState(() {}); // trigger rebuild for button color state via future
-    }
+  Future<void> _refreshEntries(String habitId) async {
+    final entries = await _repo.fetchEntriesForHabit(habitId: habitId);
+    setState(() {
+      _entries[habitId] = entries;
+    });
+  }
+
+  Future<void> _increment(Habit habit) async {
+    await _repo.incrementToday(habit: habit);
+    await _refreshEntries(habit.id);
+  }
+
+  Future<void> _decrement(Habit habit) async {
+    await _repo.decrementToday(habit: habit);
+    await _refreshEntries(habit.id);
   }
 
   Future<void> _onExpand(Habit habit) async {
-    if (_expandedHabits.contains(habit.id)) {
-      setState(() {
-        _expandedHabits.remove(habit.id);
-      });
-      return;
-    }
+    final isOpen = _expandedHabits.contains(habit.id);
 
-    _expandedHabits.add(habit.id);
-    setState(() {}); // immediate expand (can show loading shimmer if you want)
-
-    final entries = await _repo.fetchEntriesForHabit(habitId: habit.id);
     setState(() {
-      _entries[habit.id] = entries;
+      if (isOpen) {
+        _expandedHabits.remove(habit.id);
+      } else {
+        _expandedHabits.add(habit.id);
+      }
     });
+
+    // Load entries when expanding (so heatmap + streak has data)
+    if (!isOpen) {
+      await _refreshEntries(habit.id);
+    }
+  }
+
+  Future<void> _deleteHabit(Habit habit) async {
+    // HabitCard already confirms delete before dismissing,
+    // but we keep this safe if you call delete elsewhere.
+    await _repo.deleteHabit(habit.id);
+
+    setState(() {
+      _habits.removeWhere((h) => h.id == habit.id);
+      _entries.remove(habit.id);
+      _expandedHabits.remove(habit.id);
+    });
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Habit deleted')));
+  }
+
+  Future<void> _showEditHabitSheet(Habit habit) async {
+    final result = await showModalBottomSheet<Map<String, dynamic>>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => _AddHabitSheet(
+        initialName: habit.name,
+        initialFrequency: habit.frequencyPerDay,
+        initialColorHex: habit.colorHex,
+        title: 'Edit Habit',
+        buttonText: 'Update habit',
+      ),
+    );
+
+    if (result == null) return;
+
+    final updated = await _repo.updateHabit(
+      habitId: habit.id,
+      name: result['name'] as String,
+      frequencyPerDay: result['frequency'] as int,
+      colorHex: result['color'] as String?,
+    );
+
+    setState(() {
+      final idx = _habits.indexWhere((h) => h.id == habit.id);
+      if (idx != -1) _habits[idx] = updated;
+    });
+
+    // refresh entries because frequency change affects heatmap intensity + streak
+    await _refreshEntries(habit.id);
   }
 
   Future<void> _showAddHabitSheet() async {
@@ -88,6 +150,7 @@ class _HabitsPageState extends State<HabitsPage> {
       );
       setState(() {
         _habits.insert(0, newHabit);
+        _entries[newHabit.id] = [];
       });
     }
   }
@@ -120,8 +183,11 @@ class _HabitsPageState extends State<HabitsPage> {
                     habit: habit,
                     entries: entries,
                     isExpanded: isExpanded,
-                    onToggleToday: () => _onToggleToday(habit),
+                    onIncrementToday: () => _increment(habit),
+                    onDecrementToday: () => _decrement(habit),
                     onToggleExpand: () => _onExpand(habit),
+                    onEdit: () => _showEditHabitSheet(habit),
+                    onDelete: () => _deleteHabit(habit),
                   );
                 },
               ),
@@ -131,7 +197,20 @@ class _HabitsPageState extends State<HabitsPage> {
 }
 
 class _AddHabitSheet extends StatefulWidget {
-  const _AddHabitSheet();
+  final String? initialName;
+  final int? initialFrequency;
+  final String? initialColorHex;
+
+  final String title;
+  final String buttonText;
+
+  const _AddHabitSheet({
+    this.initialName,
+    this.initialFrequency,
+    this.initialColorHex,
+    this.title = 'New Habit',
+    this.buttonText = 'Save habit',
+  });
 
   @override
   State<_AddHabitSheet> createState() => _AddHabitSheetState();
@@ -139,9 +218,18 @@ class _AddHabitSheet extends StatefulWidget {
 
 class _AddHabitSheetState extends State<_AddHabitSheet> {
   final _formKey = GlobalKey<FormState>();
-  final _nameCtrl = TextEditingController();
-  int _frequency = 1;
+  late final TextEditingController _nameCtrl;
+
+  late int _frequency;
   String? _selectedColorHex;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameCtrl = TextEditingController(text: widget.initialName ?? '');
+    _frequency = widget.initialFrequency ?? 1;
+    _selectedColorHex = widget.initialColorHex;
+  }
 
   @override
   void dispose() {
@@ -194,7 +282,7 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
                   ),
                 ),
               ),
-              Text('New Habit', style: theme.textTheme.titleLarge),
+              Text(widget.title, style: theme.textTheme.titleLarge),
               TextFormField(
                 controller: _nameCtrl,
                 decoration: const InputDecoration(
@@ -251,7 +339,7 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: _submit,
-                  child: const Text('Save habit'),
+                  child: Text(widget.buttonText),
                 ),
               ),
             ],

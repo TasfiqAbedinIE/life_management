@@ -18,8 +18,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  late Future<MotivationalQuote?> _quoteFuture;
   late Future<_EfficiencySummary> _efficiencyFuture;
+  late Future<_HabitsDashboardData> _habitsFuture;
 
   late DateTime _now;
   Timer? _clockTimer;
@@ -65,6 +65,7 @@ class _HomePageState extends State<HomePage> {
     });
 
     _efficiencyFuture = _fetchEfficiencySummary(_selectedLabel);
+    _habitsFuture = _fetchHabitsDashboardData();
   }
 
   @override
@@ -361,6 +362,36 @@ class _HomePageState extends State<HomePage> {
                         },
                       ),
 
+                      const SizedBox(height: 16),
+
+                      FutureBuilder<_HabitsDashboardData>(
+                        future: _habitsFuture,
+                        builder: (context, snapshot) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
+                            return _skeletonCard(height: 180);
+                          }
+                          if (snapshot.hasError) {
+                            return _errorCard(
+                              title: 'Could not load habits',
+                              message: snapshot.error.toString(),
+                              onRetry: () => setState(() {
+                                _habitsFuture = _fetchHabitsDashboardData();
+                              }),
+                            );
+                          }
+
+                          final data = snapshot.data!;
+                          return Column(
+                            children: [
+                              _habitsTodayCard(data),
+                              const SizedBox(height: 12),
+                              _habitsPerformanceCard(data),
+                            ],
+                          );
+                        },
+                      ),
+
                       const SizedBox(height: 24),
                     ],
                   ),
@@ -387,6 +418,7 @@ class _HomePageState extends State<HomePage> {
 
       // Rebuild efficiency chart (it will fetch fresh data from Supabase)
       _efficiencyFuture = _fetchEfficiencySummary(_selectedLabel);
+      _habitsFuture = _fetchHabitsDashboardData();
     });
   }
 
@@ -700,6 +732,321 @@ class _HomePageState extends State<HomePage> {
     }
 
     return _EfficiencySummary(hasActivityHours: true, days: days);
+  }
+
+  Future<_HabitsDashboardData> _fetchHabitsDashboardData() async {
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      return const _HabitsDashboardData(
+        habits: [],
+        todayDone: {},
+        weekDone: {},
+      );
+    }
+
+    final habitsRows = await supabase
+        .from('habits')
+        .select('id, name, frequency_per_day')
+        .eq('user_id', user.id)
+        .isFilter('archived_at', null)
+        .order('created_at');
+
+    final habits = (habitsRows as List)
+        .map(
+          (r) => _Habit(
+            id: r['id'].toString(),
+            name: (r['name'] ?? '').toString(),
+            frequencyPerDay: (r['frequency_per_day'] as num?)?.toInt() ?? 1,
+          ),
+        )
+        .toList();
+
+    if (habits.isEmpty) {
+      return const _HabitsDashboardData(
+        habits: [],
+        todayDone: {},
+        weekDone: {},
+      );
+    }
+
+    final habitIds = habits.map((h) => h.id).toList();
+
+    final today = DateTime.now();
+    final todayStr = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).toIso8601String().split('T').first;
+
+    final start7 = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).subtract(const Duration(days: 6));
+    final start7Str = start7.toIso8601String().split('T').first;
+
+    final entriesRows = await supabase
+        .from('habit_entries')
+        .select('habit_id, entry_date, done_count')
+        .inFilter('habit_id', habitIds)
+        .gte('entry_date', start7Str)
+        .lte('entry_date', todayStr);
+
+    final Map<String, int> todayDone = {};
+    final Map<String, int> weekDone = {};
+
+    for (final e in (entriesRows as List)) {
+      final hid = e['habit_id'].toString();
+      final d = e['entry_date'].toString();
+      final done = (e['done_count'] as num?)?.toInt() ?? 0;
+
+      weekDone[hid] = (weekDone[hid] ?? 0) + done;
+      if (d == todayStr) todayDone[hid] = done;
+    }
+
+    return _HabitsDashboardData(
+      habits: habits,
+      todayDone: todayDone,
+      weekDone: weekDone,
+    );
+  }
+
+  Future<void> _changeHabitDone({
+    required String habitId,
+    required String entryDate,
+    required int delta,
+    required int maxPerDay,
+  }) async {
+    final supabase = Supabase.instance.client;
+
+    final existing = await supabase
+        .from('habit_entries')
+        .select('id, done_count')
+        .eq('habit_id', habitId)
+        .eq('entry_date', entryDate)
+        .maybeSingle();
+
+    if (existing == null) {
+      if (delta <= 0) return;
+      final newDone = 1.clamp(0, maxPerDay);
+      await supabase.from('habit_entries').insert({
+        'habit_id': habitId,
+        'entry_date': entryDate,
+        'done_count': newDone,
+      });
+    } else {
+      final id = existing['id'];
+      final current = (existing['done_count'] as num?)?.toInt() ?? 0;
+      final next = (current + delta).clamp(0, maxPerDay);
+
+      await supabase
+          .from('habit_entries')
+          .update({'done_count': next})
+          .eq('id', id);
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _habitsFuture = _fetchHabitsDashboardData();
+    });
+  }
+
+  Widget _miniCircleButton({
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: Icon(icon, size: 18, color: Colors.indigo[700]),
+      ),
+    );
+  }
+
+  Widget _habitsTodayCard(_HabitsDashboardData data) {
+    final today = DateTime.now();
+    final todayStr = DateTime(
+      today.year,
+      today.month,
+      today.day,
+    ).toIso8601String().split('T').first;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[200]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Today's habits",
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+          ),
+          const SizedBox(height: 10),
+
+          if (data.habits.isEmpty)
+            Text(
+              "No habits yet. Add habits to start tracking.",
+              style: TextStyle(color: Colors.grey[600]),
+            )
+          else
+            ...data.habits.map((h) {
+              final done = data.todayDone[h.id] ?? 0;
+              final max = h.frequencyPerDay;
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        h.name,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      "$done/$max",
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    _miniCircleButton(
+                      icon: Icons.remove,
+                      onTap: () => _changeHabitDone(
+                        habitId: h.id,
+                        entryDate: todayStr,
+                        delta: -1,
+                        maxPerDay: max,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    _miniCircleButton(
+                      icon: Icons.add,
+                      onTap: () => _changeHabitDone(
+                        habitId: h.id,
+                        entryDate: todayStr,
+                        delta: 1,
+                        maxPerDay: max,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () {
+                Navigator.of(
+                  context,
+                ).push(MaterialPageRoute(builder: (_) => const HabitsPage()));
+              },
+              child: const Text("Open habits"),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _habitsPerformanceCard(_HabitsDashboardData data) {
+    final score = data.weekScorePercent.clamp(0.0, 150.0);
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[200]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Habit performance (7 days)",
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            "Score: ${score.toStringAsFixed(0)}%  •  ${data.weekDoneTotal}/${data.weekTargetTotal} done",
+            style: TextStyle(color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(
+            value: (score / 100).clamp(0.0, 1.0),
+            minHeight: 8,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          const SizedBox(height: 14),
+          ...data.habits.map((h) {
+            final done = data.weekDone[h.id] ?? 0;
+            final target = h.frequencyPerDay * 7;
+            final pct = target == 0 ? 0.0 : (done / target).clamp(0.0, 1.0);
+
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          h.name,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        "$done/$target",
+                        style: TextStyle(color: Colors.grey[700]),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  LinearProgressIndicator(
+                    value: pct,
+                    minHeight: 6,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        ],
+      ),
+    );
   }
 }
 
@@ -1018,6 +1365,41 @@ class _EfficiencyChart extends StatelessWidget {
   }
 }
 
+class _Habit {
+  final String id;
+  final String name;
+  final int frequencyPerDay;
+
+  const _Habit({
+    required this.id,
+    required this.name,
+    required this.frequencyPerDay,
+  });
+}
+
+class _HabitsDashboardData {
+  final List<_Habit> habits;
+  final Map<String, int> todayDone;
+  final Map<String, int> weekDone;
+
+  const _HabitsDashboardData({
+    required this.habits,
+    required this.todayDone,
+    required this.weekDone,
+  });
+
+  int get weekTargetTotal =>
+      habits.fold(0, (p, h) => p + (h.frequencyPerDay * 7));
+
+  int get weekDoneTotal => habits.fold(0, (p, h) => p + (weekDone[h.id] ?? 0));
+
+  double get weekScorePercent {
+    final target = weekTargetTotal;
+    if (target <= 0) return 0;
+    return (weekDoneTotal / target) * 100.0;
+  }
+}
+
 class _MinimalActionButton extends StatelessWidget {
   final Widget icon; // ← any widget you want to pass
   final String label;
@@ -1063,62 +1445,3 @@ class _MinimalActionButton extends StatelessWidget {
     );
   }
 }
-
-// class _AppDrawer extends StatelessWidget {
-//   const _AppDrawer();
-
-//   @override
-//   Widget build(BuildContext context) {
-//     return Drawer(
-//       child: SafeArea(
-//         child: Column(
-//           children: [
-//             const UserAccountsDrawerHeader(
-//               accountName: Text(
-//                 'Square Productivity',
-//                 style: TextStyle(fontWeight: FontWeight.bold),
-//               ),
-//               accountEmail: Text(''),
-//               currentAccountPicture: CircleAvatar(
-//                 backgroundColor: Color(0xFF283593),
-//                 child: Icon(
-//                   Icons.check_circle_outline,
-//                   color: Colors.white,
-//                   size: 32,
-//                 ),
-//               ),
-//               decoration: BoxDecoration(color: Color(0xFF3F51B5)),
-//             ),
-//             ListTile(
-//               leading: const Icon(Icons.dashboard),
-//               title: const Text('Dashboard'),
-//               onTap: () {
-//                 Navigator.pop(context);
-//               },
-//             ),
-//             ListTile(
-//               leading: const Icon(Icons.task_alt),
-//               title: const Text('Tasks'),
-//               onTap: () {
-//                 Navigator.pop(context);
-//                 Navigator.of(
-//                   context,
-//                 ).push(MaterialPageRoute(builder: (_) => const TaskPage()));
-//               },
-//             ),
-//             ListTile(
-//               leading: const Icon(Icons.settings),
-//               title: const Text('Settings'),
-//               onTap: () {
-//                 Navigator.pop(context);
-//                 Navigator.of(
-//                   context,
-//                 ).push(MaterialPageRoute(builder: (_) => const SettingsPage()));
-//               },
-//             ),
-//           ],
-//         ),
-//       ),
-//     );
-//   }
-// }

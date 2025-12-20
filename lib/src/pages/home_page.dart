@@ -19,7 +19,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   late Future<_EfficiencySummary> _efficiencyFuture;
-  late Future<_HabitsDashboardData> _habitsFuture;
 
   late DateTime _now;
   Timer? _clockTimer;
@@ -65,7 +64,6 @@ class _HomePageState extends State<HomePage> {
     });
 
     _efficiencyFuture = _fetchEfficiencySummary(_selectedLabel);
-    _habitsFuture = _fetchHabitsDashboardData();
   }
 
   @override
@@ -364,30 +362,12 @@ class _HomePageState extends State<HomePage> {
 
                       const SizedBox(height: 16),
 
-                      FutureBuilder<_HabitsDashboardData>(
-                        future: _habitsFuture,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return _skeletonCard(height: 180);
-                          }
-                          if (snapshot.hasError) {
-                            return _errorCard(
-                              title: 'Could not load habits',
-                              message: snapshot.error.toString(),
-                              onRetry: () => setState(() {
-                                _habitsFuture = _fetchHabitsDashboardData();
-                              }),
-                            );
-                          }
-
-                          final data = snapshot.data!;
-                          return Column(
-                            children: [
-                              _habitsTodayCard(data),
-                              const SizedBox(height: 12),
-                              _habitsPerformanceCard(data),
-                            ],
+                      _HabitsDashboardSection(
+                        onOpenHabits: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const HabitsPage(),
+                            ),
                           );
                         },
                       ),
@@ -418,7 +398,6 @@ class _HomePageState extends State<HomePage> {
 
       // Rebuild efficiency chart (it will fetch fresh data from Supabase)
       _efficiencyFuture = _fetchEfficiencySummary(_selectedLabel);
-      _habitsFuture = _fetchHabitsDashboardData();
     });
   }
 
@@ -732,321 +711,6 @@ class _HomePageState extends State<HomePage> {
     }
 
     return _EfficiencySummary(hasActivityHours: true, days: days);
-  }
-
-  Future<_HabitsDashboardData> _fetchHabitsDashboardData() async {
-    final supabase = Supabase.instance.client;
-    final user = supabase.auth.currentUser;
-    if (user == null) {
-      return const _HabitsDashboardData(
-        habits: [],
-        todayDone: {},
-        weekDone: {},
-      );
-    }
-
-    final habitsRows = await supabase
-        .from('habits')
-        .select('id, name, frequency_per_day')
-        .eq('user_id', user.id)
-        .isFilter('archived_at', null)
-        .order('created_at');
-
-    final habits = (habitsRows as List)
-        .map(
-          (r) => _Habit(
-            id: r['id'].toString(),
-            name: (r['name'] ?? '').toString(),
-            frequencyPerDay: (r['frequency_per_day'] as num?)?.toInt() ?? 1,
-          ),
-        )
-        .toList();
-
-    if (habits.isEmpty) {
-      return const _HabitsDashboardData(
-        habits: [],
-        todayDone: {},
-        weekDone: {},
-      );
-    }
-
-    final habitIds = habits.map((h) => h.id).toList();
-
-    final today = DateTime.now();
-    final todayStr = DateTime(
-      today.year,
-      today.month,
-      today.day,
-    ).toIso8601String().split('T').first;
-
-    final start7 = DateTime(
-      today.year,
-      today.month,
-      today.day,
-    ).subtract(const Duration(days: 6));
-    final start7Str = start7.toIso8601String().split('T').first;
-
-    final entriesRows = await supabase
-        .from('habit_entries')
-        .select('habit_id, entry_date, done_count')
-        .inFilter('habit_id', habitIds)
-        .gte('entry_date', start7Str)
-        .lte('entry_date', todayStr);
-
-    final Map<String, int> todayDone = {};
-    final Map<String, int> weekDone = {};
-
-    for (final e in (entriesRows as List)) {
-      final hid = e['habit_id'].toString();
-      final d = e['entry_date'].toString();
-      final done = (e['done_count'] as num?)?.toInt() ?? 0;
-
-      weekDone[hid] = (weekDone[hid] ?? 0) + done;
-      if (d == todayStr) todayDone[hid] = done;
-    }
-
-    return _HabitsDashboardData(
-      habits: habits,
-      todayDone: todayDone,
-      weekDone: weekDone,
-    );
-  }
-
-  Future<void> _changeHabitDone({
-    required String habitId,
-    required String entryDate,
-    required int delta,
-    required int maxPerDay,
-  }) async {
-    final supabase = Supabase.instance.client;
-
-    final existing = await supabase
-        .from('habit_entries')
-        .select('id, done_count')
-        .eq('habit_id', habitId)
-        .eq('entry_date', entryDate)
-        .maybeSingle();
-
-    if (existing == null) {
-      if (delta <= 0) return;
-      final newDone = 1.clamp(0, maxPerDay);
-      await supabase.from('habit_entries').insert({
-        'habit_id': habitId,
-        'entry_date': entryDate,
-        'done_count': newDone,
-      });
-    } else {
-      final id = existing['id'];
-      final current = (existing['done_count'] as num?)?.toInt() ?? 0;
-      final next = (current + delta).clamp(0, maxPerDay);
-
-      await supabase
-          .from('habit_entries')
-          .update({'done_count': next})
-          .eq('id', id);
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _habitsFuture = _fetchHabitsDashboardData();
-    });
-  }
-
-  Widget _miniCircleButton({
-    required IconData icon,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Container(
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          color: Colors.grey[100],
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey[300]!),
-        ),
-        child: Icon(icon, size: 18, color: Colors.indigo[700]),
-      ),
-    );
-  }
-
-  Widget _habitsTodayCard(_HabitsDashboardData data) {
-    final today = DateTime.now();
-    final todayStr = DateTime(
-      today.year,
-      today.month,
-      today.day,
-    ).toIso8601String().split('T').first;
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Today's habits",
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-          ),
-          const SizedBox(height: 10),
-
-          if (data.habits.isEmpty)
-            Text(
-              "No habits yet. Add habits to start tracking.",
-              style: TextStyle(color: Colors.grey[600]),
-            )
-          else
-            ...data.habits.map((h) {
-              final done = data.todayDone[h.id] ?? 0;
-              final max = h.frequencyPerDay;
-
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 6),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        h.name,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    Text(
-                      "$done/$max",
-                      style: TextStyle(
-                        color: Colors.grey[700],
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    _miniCircleButton(
-                      icon: Icons.remove,
-                      onTap: () => _changeHabitDone(
-                        habitId: h.id,
-                        entryDate: todayStr,
-                        delta: -1,
-                        maxPerDay: max,
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                    _miniCircleButton(
-                      icon: Icons.add,
-                      onTap: () => _changeHabitDone(
-                        habitId: h.id,
-                        entryDate: todayStr,
-                        delta: 1,
-                        maxPerDay: max,
-                      ),
-                    ),
-                  ],
-                ),
-              );
-            }).toList(),
-
-          const SizedBox(height: 8),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () {
-                Navigator.of(
-                  context,
-                ).push(MaterialPageRoute(builder: (_) => const HabitsPage()));
-              },
-              child: const Text("Open habits"),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _habitsPerformanceCard(_HabitsDashboardData data) {
-    final score = data.weekScorePercent.clamp(0.0, 150.0);
-
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "Habit performance (7 days)",
-            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            "Score: ${score.toStringAsFixed(0)}%  •  ${data.weekDoneTotal}/${data.weekTargetTotal} done",
-            style: TextStyle(color: Colors.grey[700]),
-          ),
-          const SizedBox(height: 12),
-          LinearProgressIndicator(
-            value: (score / 100).clamp(0.0, 1.0),
-            minHeight: 8,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          const SizedBox(height: 14),
-          ...data.habits.map((h) {
-            final done = data.weekDone[h.id] ?? 0;
-            final target = h.frequencyPerDay * 7;
-            final pct = target == 0 ? 0.0 : (done / target).clamp(0.0, 1.0);
-
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          h.name,
-                          style: const TextStyle(fontWeight: FontWeight.w600),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      Text(
-                        "$done/$target",
-                        style: TextStyle(color: Colors.grey[700]),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  LinearProgressIndicator(
-                    value: pct,
-                    minHeight: 6,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                ],
-              ),
-            );
-          }).toList(),
-        ],
-      ),
-    );
   }
 }
 
@@ -1379,24 +1043,34 @@ class _Habit {
 
 class _HabitsDashboardData {
   final List<_Habit> habits;
+
+  /// today done_count map by habit_id
   final Map<String, int> todayDone;
+
+  /// last 7 days sum(done_count) map by habit_id (kept if you need later)
   final Map<String, int> weekDone;
+
+  /// Heatmap: entry_date -> completion fraction (0.0 to 1.0)
+  final Map<String, double> dayCompletion;
 
   const _HabitsDashboardData({
     required this.habits,
     required this.todayDone,
     required this.weekDone,
+    required this.dayCompletion,
   });
 
-  int get weekTargetTotal =>
-      habits.fold(0, (p, h) => p + (h.frequencyPerDay * 7));
+  int get totalHabits => habits.length;
 
-  int get weekDoneTotal => habits.fold(0, (p, h) => p + (weekDone[h.id] ?? 0));
-
-  double get weekScorePercent {
-    final target = weekTargetTotal;
-    if (target <= 0) return 0;
-    return (weekDoneTotal / target) * 100.0;
+  double get overall7DayPercent {
+    if (dayCompletion.isEmpty) return 0;
+    // Use only last 7 days from available heatmap data
+    final keys = dayCompletion.keys.toList()..sort();
+    final last7 = keys.length <= 7 ? keys : keys.sublist(keys.length - 7);
+    final avg =
+        last7.fold<double>(0, (p, k) => p + (dayCompletion[k] ?? 0.0)) /
+        last7.length;
+    return avg * 100.0;
   }
 }
 
@@ -1441,6 +1115,638 @@ class _MinimalActionButton extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// Added this section for separating the Habit ---->
+class _HabitsDashboardSection extends StatefulWidget {
+  const _HabitsDashboardSection({required this.onOpenHabits});
+
+  final VoidCallback onOpenHabits;
+
+  @override
+  State<_HabitsDashboardSection> createState() =>
+      _HabitsDashboardSectionState();
+}
+
+class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
+  late Future<_HabitsDashboardData> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _fetchHabitsDashboardData();
+    _future.then((data) {
+      if (!mounted) return;
+      setState(() => _cache = data);
+    });
+  }
+
+  _HabitsDashboardData? _cache; // local cached dashboard data
+  int _pendingSaves = 0;
+  bool get _saving => _pendingSaves > 0;
+
+  Future<void> refresh() async {
+    setState(() {
+      _future = _fetchHabitsDashboardData();
+    });
+
+    final data = await _future;
+    if (!mounted) return;
+    setState(() {
+      _cache = data;
+    });
+  }
+
+  Future<_HabitsDashboardData> _fetchHabitsDashboardData() async {
+    final supabase = Supabase.instance.client;
+    final user = supabase.auth.currentUser;
+    if (user == null) {
+      return const _HabitsDashboardData(
+        habits: [],
+        todayDone: {},
+        weekDone: {},
+        dayCompletion: {},
+      );
+    }
+
+    final habitsRows = await supabase
+        .from('habits')
+        .select('id, name, frequency_per_day')
+        .eq('user_id', user.id)
+        .isFilter('archived_at', null)
+        .order('created_at');
+
+    final habits = (habitsRows as List)
+        .map(
+          (r) => _Habit(
+            id: r['id'].toString(),
+            name: (r['name'] ?? '').toString(),
+            frequencyPerDay: (r['frequency_per_day'] as num?)?.toInt() ?? 1,
+          ),
+        )
+        .toList();
+
+    if (habits.isEmpty) {
+      return const _HabitsDashboardData(
+        habits: [],
+        todayDone: {},
+        weekDone: {},
+        dayCompletion: {},
+      );
+    }
+
+    final habitIds = habits.map((h) => h.id).toList();
+
+    final now = DateTime.now();
+    final todayStr = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).toIso8601String().split('T').first;
+
+    // heatmap range (28 days)
+    final start28 = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(const Duration(days: 27));
+    final start28Str = start28.toIso8601String().split('T').first;
+
+    final start7 = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(const Duration(days: 6));
+    final start7Str = start7.toIso8601String().split('T').first;
+
+    final entriesRows = await supabase
+        .from('habit_entries')
+        .select('habit_id, entry_date, done_count')
+        .inFilter('habit_id', habitIds)
+        .gte('entry_date', start28Str)
+        .lte('entry_date', todayStr);
+
+    final Map<String, int> todayDone = {};
+    final Map<String, int> weekDone = {};
+
+    // date -> (habit_id -> done_count)
+    final Map<String, Map<String, int>> doneByDate = {};
+
+    for (final e in (entriesRows as List)) {
+      final hid = e['habit_id'].toString();
+      final d = e['entry_date'].toString(); // YYYY-MM-DD
+      final done = (e['done_count'] as num?)?.toInt() ?? 0;
+
+      doneByDate.putIfAbsent(d, () => {});
+      doneByDate[d]![hid] = done;
+
+      if (d == todayStr) {
+        todayDone[hid] = done;
+      }
+      if (d.compareTo(start7Str) >= 0) {
+        weekDone[hid] = (weekDone[hid] ?? 0) + done;
+      }
+    }
+
+    // compute dayCompletion for last 28 days
+    final Map<String, double> dayCompletion = {};
+    final habitFreq = {for (final h in habits) h.id: h.frequencyPerDay};
+
+    for (int i = 0; i < 28; i++) {
+      final day = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).subtract(Duration(days: 27 - i));
+      final ds = day.toIso8601String().split('T').first;
+
+      int completed = 0;
+      for (final h in habits) {
+        final done = doneByDate[ds]?[h.id] ?? 0;
+        if (done >= (habitFreq[h.id] ?? 1)) completed++;
+      }
+
+      final total = habits.isEmpty ? 0 : habits.length;
+      dayCompletion[ds] = total == 0 ? 0.0 : (completed / total);
+    }
+
+    return _HabitsDashboardData(
+      habits: habits,
+      todayDone: todayDone,
+      weekDone: weekDone,
+      dayCompletion: dayCompletion,
+    );
+  }
+
+  Future<void> _changeHabitDoneOptimistic({
+    required String habitId,
+    required String entryDate,
+    required int delta,
+    required int maxPerDay,
+  }) async {
+    final supabase = Supabase.instance.client;
+
+    if (_cache == null) {
+      await refresh();
+      return;
+    }
+
+    final oldToday = _cache!.todayDone[habitId] ?? 0;
+    final oldWeek = _cache!.weekDone[habitId] ?? 0;
+
+    final newToday = (oldToday + delta).clamp(0, maxPerDay);
+    final appliedDelta = newToday - oldToday;
+    if (appliedDelta == 0) return;
+
+    setState(() {
+      _pendingSaves += 1;
+
+      final newTodayDone = {..._cache!.todayDone, habitId: newToday};
+      final newWeekDone = {
+        ..._cache!.weekDone,
+        habitId: (oldWeek + appliedDelta),
+      };
+
+      final now = DateTime.now();
+      final todayKey = DateTime(
+        now.year,
+        now.month,
+        now.day,
+      ).toIso8601String().split('T').first;
+
+      int completedCount = 0;
+      for (final h in _cache!.habits) {
+        final done = (h.id == habitId) ? newToday : (newTodayDone[h.id] ?? 0);
+        if (done >= h.frequencyPerDay) completedCount++;
+      }
+
+      final totalHabits = _cache!.habits.isEmpty ? 0 : _cache!.habits.length;
+      final todayFraction = totalHabits == 0
+          ? 0.0
+          : (completedCount / totalHabits);
+
+      final newDayCompletion = {
+        ..._cache!.dayCompletion,
+        todayKey: todayFraction,
+      };
+
+      _cache = _HabitsDashboardData(
+        habits: _cache!.habits,
+        todayDone: newTodayDone,
+        weekDone: newWeekDone,
+        dayCompletion: newDayCompletion,
+      );
+    });
+
+    try {
+      final existing = await supabase
+          .from('habit_entries')
+          .select('id, done_count')
+          .eq('habit_id', habitId)
+          .eq('entry_date', entryDate)
+          .maybeSingle();
+
+      if (existing == null) {
+        if (newToday != 0) {
+          await supabase.from('habit_entries').insert({
+            'habit_id': habitId,
+            'entry_date': entryDate,
+            'done_count': newToday,
+          });
+        }
+      } else {
+        final id = existing['id'];
+        await supabase
+            .from('habit_entries')
+            .update({'done_count': newToday})
+            .eq('id', id);
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        final rolledTodayDone = {..._cache!.todayDone, habitId: oldToday};
+        final rolledWeekDone = {..._cache!.weekDone, habitId: oldWeek};
+
+        final now = DateTime.now();
+        final todayKey = DateTime(
+          now.year,
+          now.month,
+          now.day,
+        ).toIso8601String().split('T').first;
+
+        int completedCount = 0;
+        for (final h in _cache!.habits) {
+          final done = (h.id == habitId)
+              ? oldToday
+              : (rolledTodayDone[h.id] ?? 0);
+          if (done >= h.frequencyPerDay) completedCount++;
+        }
+
+        final totalHabits = _cache!.habits.isEmpty ? 0 : _cache!.habits.length;
+        final todayFraction = totalHabits == 0
+            ? 0.0
+            : (completedCount / totalHabits);
+
+        final rolledDayCompletion = {
+          ..._cache!.dayCompletion,
+          todayKey: todayFraction,
+        };
+
+        _cache = _HabitsDashboardData(
+          habits: _cache!.habits,
+          todayDone: rolledTodayDone,
+          weekDone: rolledWeekDone,
+          dayCompletion: rolledDayCompletion,
+        );
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text("Failed to update habit. Please try again.\n$e"),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _pendingSaves = (_pendingSaves - 1).clamp(0, 999999);
+      });
+    }
+  }
+
+  Widget _miniCircleButton({required IconData icon, VoidCallback? onTap}) {
+    final disabled = onTap == null;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        width: 30,
+        height: 30,
+        decoration: BoxDecoration(
+          color: disabled ? Colors.grey[200] : Colors.grey[100],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: Icon(
+          icon,
+          size: 18,
+          color: disabled ? Colors.grey[400] : Colors.indigo[700],
+        ),
+      ),
+    );
+  }
+
+  Widget _habitsTodayCard(_HabitsDashboardData data) {
+    final now = DateTime.now();
+    final todayStr = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).toIso8601String().split('T').first;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[200]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                "Today's habits",
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+              ),
+
+              // ⏳ syncing indicator (only while saving)
+              if (_saving)
+                const Padding(
+                  padding: EdgeInsets.only(left: 8),
+                  child: SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          if (data.habits.isEmpty)
+            Text(
+              "No habits yet. Add habits to start tracking.",
+              style: TextStyle(color: Colors.grey[600]),
+            )
+          else
+            ...data.habits.map((h) {
+              final done = data.todayDone[h.id] ?? 0;
+              final max = h.frequencyPerDay;
+
+              final canAdd = done < max;
+              final canRemove = done > 0;
+
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        h.name,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    Text(
+                      "$done/$max",
+                      style: TextStyle(
+                        color: Colors.grey[700],
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    _miniCircleButton(
+                      icon: Icons.remove,
+                      onTap: canRemove
+                          ? () => _changeHabitDoneOptimistic(
+                              habitId: h.id,
+                              entryDate: todayStr,
+                              delta: -1,
+                              maxPerDay: max,
+                            )
+                          : null,
+                    ),
+
+                    const SizedBox(width: 6),
+
+                    // plus
+                    _miniCircleButton(
+                      icon: Icons.add,
+                      onTap: canAdd
+                          ? () => _changeHabitDoneOptimistic(
+                              habitId: h.id,
+                              entryDate: todayStr,
+                              delta: 1,
+                              maxPerDay: max,
+                            )
+                          : null,
+                    ),
+                  ],
+                ),
+              );
+            }).toList(),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: widget.onOpenHabits,
+              child: const Text("Open habits"),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _habitsPerformanceCard(_HabitsDashboardData data) {
+    final overall = data.overall7DayPercent.clamp(0.0, 100.0);
+    final totalHabits = data.totalHabits;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey[200]!),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 16,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "Habit performance",
+            style: TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            "Overall (last 7 days): ${overall.toStringAsFixed(0)}%  •  $totalHabits habits",
+            style: TextStyle(color: Colors.grey[700]),
+          ),
+          const SizedBox(height: 12),
+          LinearProgressIndicator(
+            value: (overall / 100).clamp(0.0, 1.0),
+            minHeight: 8,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          const SizedBox(height: 14),
+          _HabitsHeatmap(dayCompletion: data.dayCompletion),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<_HabitsDashboardData>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            height: 180,
+            decoration: BoxDecoration(
+              color: Colors.grey[200],
+              borderRadius: BorderRadius.circular(16),
+            ),
+          );
+        }
+        if (snapshot.hasError) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.red[50],
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.red[100]!),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.red),
+                const SizedBox(width: 12),
+                Expanded(child: Text(snapshot.error.toString())),
+                TextButton(onPressed: refresh, child: const Text('Retry')),
+              ],
+            ),
+          );
+        }
+
+        final data = _cache ?? snapshot.data!;
+        return Column(
+          children: [
+            _habitsTodayCard(data),
+            const SizedBox(height: 12),
+            _habitsPerformanceCard(data),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _HabitsHeatmap extends StatelessWidget {
+  final Map<String, double> dayCompletion; // dateStr -> 0..1
+
+  const _HabitsHeatmap({required this.dayCompletion});
+
+  @override
+  Widget build(BuildContext context) {
+    if (dayCompletion.isEmpty) {
+      return Text(
+        "No habit activity yet.",
+        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+      );
+    }
+
+    final keys = dayCompletion.keys.toList()..sort(); // chronological
+    final primary = Theme.of(context).colorScheme.primary;
+
+    // 28 squares = 4 weeks x 7 days
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          "Last 28 days",
+          style: TextStyle(
+            color: Colors.grey[700],
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 10),
+        Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: keys.map((k) {
+            final v = (dayCompletion[k] ?? 0.0).clamp(0.0, 1.0);
+
+            // intensity color
+            final c = Color.lerp(Colors.grey[200], primary, v) ?? primary;
+
+            return GestureDetector(
+              onTap: () {
+                final pct = (v * 100).toStringAsFixed(0);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text("$k • $pct% habits completed"),
+                    duration: const Duration(seconds: 2),
+                  ),
+                );
+              },
+              child: Container(
+                width: 16,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: c,
+                  borderRadius: BorderRadius.circular(4),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Text(
+              "Less",
+              style: TextStyle(color: Colors.grey[600], fontSize: 11),
+            ),
+            const SizedBox(width: 6),
+            _legendBox(context, 0.0),
+            const SizedBox(width: 4),
+            _legendBox(context, 0.33),
+            const SizedBox(width: 4),
+            _legendBox(context, 0.66),
+            const SizedBox(width: 4),
+            _legendBox(context, 1.0),
+            const SizedBox(width: 6),
+            Text(
+              "More",
+              style: TextStyle(color: Colors.grey[600], fontSize: 11),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _legendBox(BuildContext context, double v) {
+    final primary = Theme.of(context).colorScheme.primary;
+    final c = Color.lerp(Colors.grey[200], primary, v) ?? primary;
+
+    return Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        color: c,
+        borderRadius: BorderRadius.circular(3),
+        border: Border.all(color: Colors.grey.shade300),
       ),
     );
   }

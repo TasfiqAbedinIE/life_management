@@ -9,6 +9,7 @@ import 'dart:async';
 import 'shopping_list_home_page.dart';
 import '../coupled/coupled_request_page.dart';
 import '../habits/presentation/habits_page.dart';
+import '../notes/pages/notes_list_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -447,6 +448,15 @@ class _HomePageState extends State<HomePage> {
             Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const HabitsPage()));
+          },
+        ),
+        _MinimalActionButton(
+          icon: Image.asset("assets/icon/notes_icon.png", fit: BoxFit.contain),
+          label: "Notes",
+          onTap: () {
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const NotesListPage()));
           },
         ),
         _MinimalActionButton(

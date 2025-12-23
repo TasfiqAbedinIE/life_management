@@ -148,4 +148,81 @@ class CoupleRepository {
       return 'Failed to decline the request. Please try again.';
     }
   }
+
+  // ===== TOUR PLANS =====
+
+  Future<List<Map<String, dynamic>>> fetchTourPlans(String coupleId) async {
+    final res = await _client
+        .from('couple_tour_plans')
+        .select()
+        .eq('couple_id', coupleId)
+        .order('probable_date', ascending: true);
+
+    if (res is List) {
+      return res.map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    return [];
+  }
+
+  Future<String?> addTourPlan({
+    required String coupleId,
+    required String title,
+    required String description,
+    required double? budget,
+    required DateTime? probableDate,
+    required String status,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return 'Not authenticated';
+
+    try {
+      await _client.from('couple_tour_plans').insert({
+        'couple_id': coupleId,
+        'title': title,
+        'description': description,
+        'estimated_budget': budget,
+        'probable_date': probableDate?.toIso8601String().split('T').first,
+        'status': status,
+        'created_by': user.id,
+      });
+      return null;
+    } catch (_) {
+      return 'Failed to save tour plan';
+    }
+  }
+
+  Future<String?> updateTourPlan({
+    required String planId,
+    required String title,
+    required String description,
+    required double? budget,
+    required DateTime? probableDate,
+    required String status,
+  }) async {
+    try {
+      await _client
+          .from('couple_tour_plans')
+          .update({
+            'title': title,
+            'description': description,
+            'estimated_budget': budget,
+            'probable_date': probableDate?.toIso8601String().split('T').first,
+            'status': status,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('id', planId);
+      return null;
+    } catch (_) {
+      return 'Failed to update tour plan';
+    }
+  }
+
+  Future<String?> deleteTourPlan(String planId) async {
+    try {
+      await _client.from('couple_tour_plans').delete().eq('id', planId);
+      return null;
+    } catch (_) {
+      return 'Failed to delete tour plan';
+    }
+  }
 }

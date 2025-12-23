@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'couple_repository.dart';
+import 'tour_plan_section.dart';
 
 class CoupledDashboardPage extends StatefulWidget {
   const CoupledDashboardPage({super.key});
@@ -29,6 +30,8 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
     "Your smile is the home my soul returns to. 🏡",
     "Our love story is my favourite notification. 📩",
   ];
+
+  String? _coupleId;
 
   @override
   void initState() {
@@ -56,6 +59,7 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
 
     setState(() {
       _relationshipDate = relDate;
+      _coupleId = couple['id'] as String;
       _loading = false;
     });
 
@@ -269,6 +273,10 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                               ],
                             ),
                           ),
+                          if (_coupleId != null) ...[
+                            const SizedBox(height: 20),
+                            TourPlanSection(coupleId: _coupleId!, repo: _repo),
+                          ],
                         ],
                       ),
               ),

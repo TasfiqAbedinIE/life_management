@@ -18,6 +18,7 @@ class _TaskPageState extends State<TaskPage> {
   bool _loadingTasks = false;
 
   DateTime _selectedDate = DateTime.now();
+  String _selectedLabel = 'ALL';
 
   @override
   void initState() {
@@ -31,12 +32,17 @@ class _TaskPageState extends State<TaskPage> {
       final userId = _supabase.auth.currentUser!.id;
       final dateStr = DateFormat('yyyy-MM-dd').format(_selectedDate); // 👈
 
-      final res = await _supabase
+      var query = _supabase
           .from('tasks')
           .select('*')
           .eq('user_id', userId)
-          .eq('start_date', dateStr) // 👈 filter by selected date
-          .order('created_at', ascending: false);
+          .eq('start_date', dateStr);
+
+      if (_selectedLabel != 'ALL') {
+        query = query.eq('label', _selectedLabel);
+      }
+
+      final res = await query.order('created_at', ascending: false);
 
       final tasksList = List<Map<String, dynamic>>.from(res as List);
       setState(() {
@@ -85,9 +91,22 @@ class _TaskPageState extends State<TaskPage> {
       ),
       builder: (ctx) => AddTaskSheet(
         onTaskSaved: (task) {
-          setState(() {
-            _tasks.insert(0, task); // insert newest at top
-          });
+          final taskDateStr = task['start_date'] as String?;
+          final taskLabel = (task['label'] ?? '').toString();
+
+          final selectedDateStr = DateFormat(
+            'yyyy-MM-dd',
+          ).format(_selectedDate);
+
+          final dateMatch = taskDateStr == selectedDateStr;
+          final labelMatch =
+              _selectedLabel == 'ALL' || taskLabel == _selectedLabel;
+
+          if (dateMatch && labelMatch) {
+            setState(() {
+              _tasks.insert(0, task);
+            });
+          }
         },
       ),
     );
@@ -189,11 +208,39 @@ class _TaskPageState extends State<TaskPage> {
                       ),
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  // TextButton(
-                  //   onPressed: _resetToToday,
-                  //   child: const Text('Today'),
-                  // ),
+                  const SizedBox(width: 10),
+                  // 👇 Label filter dropdown
+                  SizedBox(
+                    width: 150,
+                    child: DropdownButtonFormField<String>(
+                      value: _selectedLabel,
+                      decoration: const InputDecoration(
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'ALL', child: Text('All')),
+                        DropdownMenuItem(
+                          value: 'OFFICE',
+                          child: Text('Office'),
+                        ),
+                        DropdownMenuItem(value: 'HOME', child: Text('Home')),
+                        DropdownMenuItem(
+                          value: 'PERSONAL',
+                          child: Text('Personal'),
+                        ),
+                      ],
+                      onChanged: (v) async {
+                        if (v == null) return;
+                        setState(() => _selectedLabel = v);
+                        await _loadTasks(); // 👈 reload with the new label filter
+                      },
+                    ),
+                  ),
                 ],
               ),
             ),

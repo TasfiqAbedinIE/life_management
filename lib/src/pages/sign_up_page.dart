@@ -94,17 +94,17 @@ class _SignUpPageState extends State<SignUpPage>
       suffixIcon: suffixIcon,
       filled: true,
       fillColor: Colors.white.withOpacity(0.10),
-      labelStyle: TextStyle(color: Colors.white.withOpacity(0.85)),
-      prefixIconColor: Colors.white.withOpacity(0.90),
-      suffixIconColor: Colors.white.withOpacity(0.85),
+      labelStyle: TextStyle(color: Colors.black.withOpacity(0.85)),
+      prefixIconColor: Colors.black.withOpacity(0.90),
+      suffixIconColor: Colors.black.withOpacity(0.85),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.18)),
+        borderSide: BorderSide(color: Colors.black.withOpacity(0.18)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.38)),
+        borderSide: BorderSide(color: Colors.black.withOpacity(0.38)),
       ),
     );
   }
@@ -182,7 +182,7 @@ class _SignUpPageState extends State<SignUpPage>
                     margin: const EdgeInsets.only(top: 12),
                     padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.10),
+                      color: Colors.white.withOpacity(0.98),
                       borderRadius: BorderRadius.circular(22),
                       border: Border.all(color: Colors.white.withOpacity(0.16)),
                       boxShadow: [
@@ -199,7 +199,7 @@ class _SignUpPageState extends State<SignUpPage>
                         Text(
                           'Sign Up',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.95),
+                            color: const Color(0xFF283593),
                             fontWeight: FontWeight.w800,
                             fontSize: 20,
                           ),
@@ -207,9 +207,7 @@ class _SignUpPageState extends State<SignUpPage>
                         const SizedBox(height: 6),
                         Text(
                           'Join SPARROW and stay in control.',
-                          style: TextStyle(
-                            color: Colors.white.withOpacity(0.70),
-                          ),
+                          style: TextStyle(color: Colors.black),
                         ),
                         const SizedBox(height: 14),
 
@@ -224,7 +222,7 @@ class _SignUpPageState extends State<SignUpPage>
                             children: [
                               TextFormField(
                                 controller: _name,
-                                style: const TextStyle(color: Colors.white),
+                                style: const TextStyle(color: Colors.black),
                                 decoration: _deco(
                                   label: 'Full name',
                                   icon: Icons.person_outline,
@@ -240,7 +238,7 @@ class _SignUpPageState extends State<SignUpPage>
                               TextFormField(
                                 controller: _email,
                                 keyboardType: TextInputType.emailAddress,
-                                style: const TextStyle(color: Colors.white),
+                                style: const TextStyle(color: Colors.black),
                                 decoration: _deco(
                                   label: 'Email',
                                   icon: Icons.mail_outline,
@@ -258,7 +256,7 @@ class _SignUpPageState extends State<SignUpPage>
                               TextFormField(
                                 controller: _password,
                                 obscureText: _obscure,
-                                style: const TextStyle(color: Colors.white),
+                                style: const TextStyle(color: Colors.black),
                                 decoration: _deco(
                                   label: 'Password',
                                   icon: Icons.lock_outline,
@@ -288,8 +286,8 @@ class _SignUpPageState extends State<SignUpPage>
                                 child: FilledButton(
                                   onPressed: _loading ? null : _signUp,
                                   style: FilledButton.styleFrom(
-                                    backgroundColor: Colors.white,
-                                    foregroundColor: const Color(0xFF283593),
+                                    backgroundColor: const Color(0xFF283593),
+                                    foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 14,
                                     ),
@@ -322,7 +320,7 @@ class _SignUpPageState extends State<SignUpPage>
                                   Text(
                                     "Already have an account? ",
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.75),
+                                      color: Colors.black.withOpacity(0.75),
                                     ),
                                   ),
                                   TextButton(
@@ -340,7 +338,7 @@ class _SignUpPageState extends State<SignUpPage>
                                             );
                                           },
                                     style: TextButton.styleFrom(
-                                      foregroundColor: Colors.white,
+                                      foregroundColor: const Color(0xFF283593),
                                     ),
                                     child: const Text(
                                       'Sign In',
@@ -377,7 +375,7 @@ class _ErrorBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.16),
+        color: Colors.red.withOpacity(0.9),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.red.withOpacity(0.35)),
       ),

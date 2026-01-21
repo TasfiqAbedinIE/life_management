@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import 'home_page.dart';
 import 'sign_up_page.dart';
 
 class SignInPage extends StatefulWidget {
@@ -72,7 +72,12 @@ class _SignInPageState extends State<SignInPage>
         email: _email.text.trim(),
         password: _password.text,
       );
-      // ✅ Do not navigate here. AuthGate will route to Home.
+      if (!mounted) return;
+      // ✅ Go to Home after successful login
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const HomePage()),
+        (route) => false,
+      );
     } on AuthException catch (e) {
       setState(() => _error = e.message);
     } catch (_) {
@@ -93,18 +98,18 @@ class _SignInPageState extends State<SignInPage>
       suffixIcon: suffixIcon,
       filled: true,
       fillColor: Colors.white.withOpacity(0.10),
-      labelStyle: TextStyle(color: Colors.white.withOpacity(0.85)),
-      hintStyle: TextStyle(color: Colors.white.withOpacity(0.65)),
-      prefixIconColor: Colors.white.withOpacity(0.90),
-      suffixIconColor: Colors.white.withOpacity(0.85),
+      labelStyle: TextStyle(color: Colors.black.withOpacity(0.85)),
+      hintStyle: TextStyle(color: Colors.black.withOpacity(0.65)),
+      prefixIconColor: Colors.black.withOpacity(0.90),
+      suffixIconColor: Colors.black.withOpacity(0.85),
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
       enabledBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.18)),
+        borderSide: BorderSide(color: Colors.black.withOpacity(0.18)),
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide(color: Colors.white.withOpacity(0.38)),
+        borderSide: BorderSide(color: Colors.black.withOpacity(0.38)),
       ),
       errorBorder: OutlineInputBorder(
         borderRadius: BorderRadius.circular(14),
@@ -194,7 +199,7 @@ class _SignInPageState extends State<SignInPage>
                     margin: const EdgeInsets.only(top: 12),
                     padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.10),
+                      color: Colors.white.withOpacity(0.98),
                       borderRadius: BorderRadius.circular(22),
                       border: Border.all(color: Colors.white.withOpacity(0.16)),
                       boxShadow: [
@@ -212,7 +217,7 @@ class _SignInPageState extends State<SignInPage>
                         Text(
                           'Sign In',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.95),
+                            color: const Color(0xFF283593),
                             fontWeight: FontWeight.w800,
                             fontSize: 20,
                           ),
@@ -221,7 +226,7 @@ class _SignInPageState extends State<SignInPage>
                         Text(
                           'Welcome back — let’s get things done.',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.70),
+                            color: Colors.black.withOpacity(0.70),
                           ),
                         ),
                         const SizedBox(height: 14),
@@ -238,7 +243,7 @@ class _SignInPageState extends State<SignInPage>
                               TextFormField(
                                 controller: _email,
                                 keyboardType: TextInputType.emailAddress,
-                                style: const TextStyle(color: Colors.white),
+                                style: const TextStyle(color: Colors.black),
                                 decoration: _deco(
                                   label: 'Email',
                                   icon: Icons.mail_outline,
@@ -256,7 +261,7 @@ class _SignInPageState extends State<SignInPage>
                               TextFormField(
                                 controller: _password,
                                 obscureText: _obscure,
-                                style: const TextStyle(color: Colors.white),
+                                style: const TextStyle(color: Colors.black),
                                 decoration: _deco(
                                   label: 'Password',
                                   icon: Icons.lock_outline,
@@ -286,8 +291,8 @@ class _SignInPageState extends State<SignInPage>
                                 child: FilledButton(
                                   onPressed: _loading ? null : _signIn,
                                   style: FilledButton.styleFrom(
-                                    backgroundColor: Colors.white,
-                                    foregroundColor: const Color(0xFF283593),
+                                    backgroundColor: const Color(0xFF283593),
+                                    foregroundColor: Colors.white,
                                     padding: const EdgeInsets.symmetric(
                                       vertical: 14,
                                     ),
@@ -320,7 +325,7 @@ class _SignInPageState extends State<SignInPage>
                                   Text(
                                     "Don’t have an account? ",
                                     style: TextStyle(
-                                      color: Colors.white.withOpacity(0.75),
+                                      color: Colors.black.withOpacity(0.75),
                                     ),
                                   ),
                                   TextButton(
@@ -335,7 +340,7 @@ class _SignInPageState extends State<SignInPage>
                                             );
                                           },
                                     style: TextButton.styleFrom(
-                                      foregroundColor: Colors.white,
+                                      foregroundColor: const Color(0xFF283593),
                                     ),
                                     child: const Text(
                                       'Sign Up',
@@ -372,7 +377,7 @@ class _ErrorBanner extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: Colors.red.withOpacity(0.16),
+        color: Colors.red.withOpacity(0.9),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: Colors.red.withOpacity(0.35)),
       ),

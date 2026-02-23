@@ -45,6 +45,9 @@ dependencies:
   path_provider: ^2.1.5
   path: ^1.9.1
   sqflite: ^2.4.2
+  dio: ^5.9.1
+  pdfx: ^2.9.2
+  flutter_epub_viewer: ^1.2.8
 
 dev_dependencies:
   flutter_test:
@@ -82,6 +85,7 @@ flutter:
     - assets/icon/coupled_icon.png
     - assets/icon/habits.png
     - assets/icon/notes_icon.png
+    - assets/icon/reader_icon.png
     
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg

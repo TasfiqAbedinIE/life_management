@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'home_page.dart';
 import 'sign_up_page.dart';
@@ -18,6 +19,7 @@ class _SignInPageState extends State<SignInPage>
   final _password = TextEditingController();
 
   bool _loading = false;
+  bool _sendingReset = false;
   bool _obscure = true;
   String? _error;
 
@@ -84,6 +86,47 @@ class _SignInPageState extends State<SignInPage>
       setState(() => _error = 'Something went wrong. Please try again.');
     } finally {
       if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<void> _sendResetPasswordEmail() async {
+    final email = _email.text.trim();
+    if (email.isEmpty || !email.contains('@')) {
+      setState(() => _error = 'Enter a valid email to reset password.');
+      return;
+    }
+
+    setState(() {
+      _sendingReset = true;
+      _error = null;
+    });
+
+    try {
+      final redirectTo = dotenv.env['PASSWORD_RESET_REDIRECT_TO'];
+      await Supabase.instance.client.auth.resetPasswordForEmail(
+        email,
+        redirectTo: (redirectTo == null || redirectTo.trim().isEmpty)
+            ? null
+            : redirectTo.trim(),
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Password reset email sent to $email. Check your inbox.',
+          ),
+        ),
+      );
+    } on AuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _error = 'Could not send reset email. Please try again.');
+    } finally {
+      if (mounted) {
+        setState(() => _sendingReset = false);
+      }
     }
   }
 
@@ -285,6 +328,26 @@ class _SignInPageState extends State<SignInPage>
                                 },
                               ),
                               const SizedBox(height: 16),
+
+                              Align(
+                                alignment: Alignment.centerRight,
+                                child: TextButton(
+                                  onPressed: (_loading || _sendingReset)
+                                      ? null
+                                      : _sendResetPasswordEmail,
+                                  child: _sendingReset
+                                      ? const SizedBox(
+                                          height: 16,
+                                          width: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Text('Forgot password?'),
+                                ),
+                              ),
+
+                              const SizedBox(height: 4),
 
                               SizedBox(
                                 width: double.infinity,

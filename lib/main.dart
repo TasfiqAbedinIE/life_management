@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'src/pages/home_page.dart';
 import 'src/pages/sign_in_page.dart';
+import 'src/pages/update_password_page.dart';
 import 'src/theme/app_theme.dart';
 import 'src/bootstrap/settings_bootstrap.dart';
 
@@ -35,6 +36,21 @@ class TaskApp extends StatelessWidget {
           valueListenable: AppTheme.fontFamily,
           builder: (context, font, _) {
             return MaterialApp(
+              builder: (context, child) {
+                final mediaQuery = MediaQuery.of(context);
+
+                // Flutter 3.16+: use textScaler
+                return MediaQuery(
+                  data: mediaQuery.copyWith(
+                    textScaler: mediaQuery.textScaler.clamp(
+                      minScaleFactor: 1.0,
+                      maxScaleFactor:
+                          1.0, // change to 1.1 or 1.2 if you want slight scaling
+                    ),
+                  ),
+                  child: child!,
+                );
+              },
               title: 'Task Management App',
               theme: AppTheme.lightTheme(font),
               darkTheme: AppTheme.darkTheme(font),
@@ -58,6 +74,7 @@ class AuthGate extends StatelessWidget {
     return StreamBuilder<AuthState>(
       stream: supa.auth.onAuthStateChange,
       builder: (context, snapshot) {
+        final event = snapshot.data?.event;
         final session = supa.auth.currentSession;
 
         // Optional loading state for first build
@@ -67,7 +84,11 @@ class AuthGate extends StatelessWidget {
           );
         }
 
-        if (session != null && session.user != null) {
+        if (event == AuthChangeEvent.passwordRecovery) {
+          return const UpdatePasswordPage();
+        }
+
+        if (session != null) {
           // ✅ User stays logged in across app restarts
           return const HomePage();
         } else {

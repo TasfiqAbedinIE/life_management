@@ -239,13 +239,13 @@ class _HomePageState extends State<HomePage> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Text(
-                            'Let’s make today a productive day.',
-                            style: TextStyle(
-                              color: Colors.blue[100],
-                              fontSize: 13,
-                            ),
-                          ),
+                          // Text(
+                          //   'Let’s make today a productive day.',
+                          //   style: TextStyle(
+                          //     color: Colors.blue[100],
+                          //     fontSize: 13,
+                          //   ),
+                          // ),
                         ],
                       ),
                     ),
@@ -256,7 +256,7 @@ class _HomePageState extends State<HomePage> {
                           '${_now.hour.toString().padLeft(2, '0')}:${_now.minute.toString().padLeft(2, '0')}',
                           style: const TextStyle(
                             color: Colors.white,
-                            fontSize: 18,
+                            fontSize: 16,
                             fontWeight: FontWeight.bold,
                           ),
                         ),
@@ -264,7 +264,7 @@ class _HomePageState extends State<HomePage> {
                           '${_now.day.toString().padLeft(2, '0')}-${_now.month.toString().padLeft(2, '0')}-${_now.year}',
                           style: TextStyle(
                             color: Colors.blue[100],
-                            fontSize: 12,
+                            fontSize: 10,
                           ),
                         ),
                       ],

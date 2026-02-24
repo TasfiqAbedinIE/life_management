@@ -17,7 +17,9 @@ class EbookRepoSupabase {
 
   /// Fetch user states (download/progress)
   Future<Map<String, EbookUserState>> fetchUserStates() async {
-    final userId = _client.auth.currentUser!.id;
+    final user = _client.auth.currentUser;
+    if (user == null) return {};
+    final userId = user.id;
 
     final res = await _client
         .from('ebook_user_state')
@@ -30,6 +32,24 @@ class EbookRepoSupabase {
       map[state.ebookId] = state;
     }
     return map;
+  }
+
+  Future<void> upsertUserState({
+    required String ebookId,
+    required bool downloaded,
+    required double progress,
+    String? localPath,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return;
+
+    await _client.from('ebook_user_state').upsert({
+      'user_id': user.id,
+      'ebook_id': ebookId,
+      'downloaded': downloaded,
+      'progress': progress.clamp(0.0, 1.0),
+      'local_path': localPath,
+    }, onConflict: 'user_id,ebook_id');
   }
 
   /// Signed URL for ebook file

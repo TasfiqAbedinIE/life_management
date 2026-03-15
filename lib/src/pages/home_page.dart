@@ -11,6 +11,8 @@ import '../coupled/coupled_request_page.dart';
 import '../habits/presentation/habits_page.dart';
 import '../notes/pages/notes_list_page.dart';
 import '../ebook/ui/ebook_library_page.dart';
+import '../budgeting/presentation/budgeting_page.dart';
+import '../theme/app_theme.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -117,6 +119,11 @@ class _HomePageState extends State<HomePage> {
   bool _actionsExpanded = true;
 
   Widget _actionDivider() {
+    final isDark = AppTheme.themeMode.value == ThemeMode.dark;
+    final dividerColor = isDark
+        ? Colors.white.withValues(alpha: 0.14)
+        : Colors.grey.shade300;
+    final labelColor = isDark ? const Color(0xFFB4C2DF) : Colors.grey.shade800;
     return InkWell(
       onTap: () {
         setState(() {
@@ -125,7 +132,7 @@ class _HomePageState extends State<HomePage> {
       },
       child: Row(
         children: [
-          const Expanded(child: Divider(color: Colors.grey, thickness: 0.7)),
+          Expanded(child: Divider(color: dividerColor, thickness: 0.7)),
           const SizedBox(width: 8),
           Text(
             'MENU',
@@ -133,11 +140,11 @@ class _HomePageState extends State<HomePage> {
               fontSize: 13,
               fontWeight: FontWeight.bold,
               letterSpacing: 1.5,
-              color: Colors.grey.shade800,
+              color: labelColor,
             ),
           ),
           const SizedBox(width: 8),
-          const Expanded(child: Divider(color: Colors.grey, thickness: 0.7)),
+          Expanded(child: Divider(color: dividerColor, thickness: 0.7)),
         ],
       ),
     );
@@ -162,21 +169,24 @@ class _HomePageState extends State<HomePage> {
     // final now = DateTime.now();
     final greeting = _greetingForHour(_now.hour);
     final name = _firstNameFromUser();
+    final theme = Theme.of(context);
+    final surface = AppPalette.surface(context);
+    final isDark = AppPalette.isDark(context);
 
     return Scaffold(
-      backgroundColor: const Color(0xFFEEF2FF),
+      backgroundColor: AppPalette.background(context),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFEEF2FF),
+        backgroundColor: AppPalette.background(context),
         elevation: 0,
         automaticallyImplyLeading: false,
         title: Row(
           children: [
-            const Icon(Icons.access_time_rounded, color: Color(0xFF283593)),
+            Icon(Icons.access_time_rounded, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
-            const Text(
+            Text(
               'Dashboard',
               style: TextStyle(
-                color: Color(0xFF1A237E),
+                color: theme.colorScheme.onSurface,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -184,7 +194,10 @@ class _HomePageState extends State<HomePage> {
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.logout_rounded, color: Color(0xFF1A237E)),
+            icon: Icon(
+              Icons.logout_rounded,
+              color: theme.colorScheme.onSurface,
+            ),
             onPressed: _signOut,
             tooltip: 'Logout',
           ),
@@ -203,8 +216,8 @@ class _HomePageState extends State<HomePage> {
                   vertical: 16,
                 ),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF3949AB), Color(0xFF1A237E)],
+                  gradient: LinearGradient(
+                    colors: AppPalette.heroGradient(context),
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
@@ -263,7 +276,9 @@ class _HomePageState extends State<HomePage> {
                         Text(
                           '${_now.day.toString().padLeft(2, '0')}-${_now.month.toString().padLeft(2, '0')}-${_now.year}',
                           style: TextStyle(
-                            color: Colors.blue[100],
+                            color: isDark
+                                ? const Color(0xFFBBD0FF)
+                                : Colors.blue[100],
                             fontSize: 10,
                           ),
                         ),
@@ -281,9 +296,9 @@ class _HomePageState extends State<HomePage> {
               child: RefreshIndicator(
                 onRefresh: _onRefreshDashboard,
                 child: Container(
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.vertical(
+                  decoration: BoxDecoration(
+                    color: surface,
+                    borderRadius: const BorderRadius.vertical(
                       top: Radius.circular(24),
                     ),
                   ),
@@ -461,6 +476,19 @@ class _HomePageState extends State<HomePage> {
           },
         ),
         _MinimalActionButton(
+          icon: Icon(
+            Icons.account_balance_wallet_rounded,
+            color: Theme.of(context).colorScheme.primary,
+            size: 24,
+          ),
+          label: "Budget",
+          onTap: () {
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => const BudgetingPage()));
+          },
+        ),
+        _MinimalActionButton(
           icon: Image.asset("assets/icon/reader_icon.png", fit: BoxFit.contain),
           label: "Reader",
           onTap: () {
@@ -522,10 +550,11 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _skeletonCard({double height = 120}) {
+    final isDark = AppTheme.themeMode.value == ThemeMode.dark;
     return Container(
       height: height,
       decoration: BoxDecoration(
-        color: Colors.grey[200],
+        color: isDark ? const Color(0xFF172338) : Colors.grey[200],
         borderRadius: BorderRadius.circular(16),
       ),
     );
@@ -536,12 +565,15 @@ class _HomePageState extends State<HomePage> {
     required String message,
     required VoidCallback onRetry,
   }) {
+    final isDark = AppTheme.themeMode.value == ThemeMode.dark;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.red[50],
+        color: isDark ? const Color(0xFF361920) : Colors.red[50],
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.red[100]!),
+        border: Border.all(
+          color: isDark ? const Color(0xFF7F3340) : Colors.red[100]!,
+        ),
       ),
       child: Row(
         children: [
@@ -575,15 +607,18 @@ class _HomePageState extends State<HomePage> {
     required String message,
     required VoidCallback onTap,
   }) {
+    final isDark = AppTheme.themeMode.value == ThemeMode.dark;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.blue[50],
+          color: isDark ? const Color(0xFF142844) : Colors.blue[50],
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.blue[100]!),
+          border: Border.all(
+            color: isDark ? const Color(0xFF2A4D7A) : Colors.blue[100]!,
+          ),
         ),
         child: Row(
           children: [
@@ -748,17 +783,18 @@ class _QuoteCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final isDark = AppPalette.isDark(context);
 
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFFEEF2FF), Color(0xFFE0E7FF)],
+        gradient: LinearGradient(
+          colors: AppPalette.quoteGradient(context),
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFDDE3FF)),
+        border: Border.all(color: AppPalette.border(context)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -860,6 +896,7 @@ class _EfficiencyCard extends StatelessWidget {
     final theme = Theme.of(context);
     final avgPercent = summary.averagePercent.clamp(0.0, 150.0);
     final plannedMinutes = summary.plannedMinutesPerDay;
+    final isDark = AppPalette.isDark(context);
 
     String prettyLabel;
     switch (selectedLabel) {
@@ -888,12 +925,12 @@ class _EfficiencyCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppPalette.surfaceAlt(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(color: AppPalette.border(context)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: AppPalette.softShadow(context),
             blurRadius: 16,
             offset: const Offset(0, 8),
           ),
@@ -911,13 +948,15 @@ class _EfficiencyCard extends StatelessWidget {
           const SizedBox(height: 4),
           Text(
             'Avg ${avgPercent.toStringAsFixed(0)}% of your planned focus time',
-            style: theme.textTheme.bodySmall?.copyWith(color: Colors.grey[700]),
+            style: theme.textTheme.bodySmall?.copyWith(
+              color: AppPalette.mutedText(context),
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             'Planned: $plannedMinutes min/day $plannedLabel',
             style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.grey[500],
+              color: isDark ? const Color(0xFF8798B7) : Colors.grey[500],
               fontSize: 11,
             ),
           ),
@@ -952,6 +991,7 @@ class _EfficiencyChart extends StatelessWidget {
         style: TextStyle(fontSize: 12),
       );
     }
+    final isDark = AppPalette.isDark(context);
 
     // Convert percents to 0–1 for height; cap at 150%
     final percents = days
@@ -990,9 +1030,11 @@ class _EfficiencyChart extends StatelessWidget {
                     // Percentage label above bar
                     Text(
                       '${percents[i].round()}%',
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: Colors.black54,
+                        color: isDark
+                            ? const Color(0xFFA8B7D3)
+                            : Colors.black54,
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -1014,15 +1056,15 @@ class _EfficiencyChart extends StatelessWidget {
                               colors: [
                                 Theme.of(
                                   context,
-                                ).colorScheme.primary.withOpacity(0.85),
+                                ).colorScheme.primary.withValues(alpha: 0.85),
                                 Theme.of(
                                   context,
-                                ).colorScheme.primary.withOpacity(0.4),
+                                ).colorScheme.primary.withValues(alpha: 0.4),
                               ],
                             ),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.06),
+                                color: AppPalette.softShadow(context),
                                 blurRadius: 8,
                                 offset: const Offset(0, 4),
                               ),
@@ -1034,9 +1076,11 @@ class _EfficiencyChart extends StatelessWidget {
                     const SizedBox(height: 6),
                     Text(
                       _weekdayShortLabel(days[i].date),
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
-                        color: Colors.black54,
+                        color: isDark
+                            ? const Color(0xFFA8B7D3)
+                            : Colors.black54,
                       ),
                     ),
                   ],
@@ -1107,19 +1151,26 @@ class _MinimalActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg = const Color.fromARGB(255, 255, 255, 255);
-    final Color border = const Color.fromARGB(255, 255, 255, 255);
+    final Color bg = AppPalette.surfaceAlt(context);
+    final Color border = AppPalette.border(context);
 
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: border),
-        ),
+        // decoration: BoxDecoration(
+        //   color: bg,
+        //   borderRadius: BorderRadius.circular(14),
+        //   border: Border.all(color: border),
+        //   boxShadow: [
+        //     BoxShadow(
+        //       color: AppPalette.softShadow(context),
+        //       blurRadius: 10,
+        //       offset: const Offset(0, 6),
+        //     ),
+        //   ],
+        // ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -1130,7 +1181,7 @@ class _MinimalActionButton extends StatelessWidget {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey.shade800,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ],
@@ -1440,6 +1491,7 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
 
   Widget _miniCircleButton({required IconData icon, VoidCallback? onTap}) {
     final disabled = onTap == null;
+    final isDark = AppTheme.themeMode.value == ThemeMode.dark;
 
     return InkWell(
       onTap: onTap,
@@ -1448,14 +1500,20 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
         width: 30,
         height: 30,
         decoration: BoxDecoration(
-          color: disabled ? Colors.grey[200] : Colors.grey[100],
+          color: isDark
+              ? (disabled ? const Color(0xFF1A2740) : const Color(0xFF22314D))
+              : (disabled ? Colors.grey[200] : Colors.grey[100]),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.grey[300]!),
+          border: Border.all(
+            color: isDark ? const Color(0xFF314564) : Colors.grey[300]!,
+          ),
         ),
         child: Icon(
           icon,
           size: 18,
-          color: disabled ? Colors.grey[400] : Colors.indigo[700],
+          color: isDark
+              ? (disabled ? const Color(0xFF60708E) : const Color(0xFFAEC1FF))
+              : (disabled ? Colors.grey[400] : Colors.indigo[700]),
         ),
       ),
     );
@@ -1472,12 +1530,12 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppPalette.surfaceAlt(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(color: AppPalette.border(context)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: AppPalette.softShadow(context),
             blurRadius: 16,
             offset: const Offset(0, 8),
           ),
@@ -1509,7 +1567,7 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
           if (data.habits.isEmpty)
             Text(
               "No habits yet. Add habits to start tracking.",
-              style: TextStyle(color: Colors.grey[600]),
+              style: TextStyle(color: AppPalette.mutedText(context)),
             )
           else
             ...data.habits.map((h) {
@@ -1533,7 +1591,7 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
                     Text(
                       "$done/$max",
                       style: TextStyle(
-                        color: Colors.grey[700],
+                        color: AppPalette.mutedText(context),
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -1588,12 +1646,12 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppPalette.surfaceAlt(context),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey[200]!),
+        border: Border.all(color: AppPalette.border(context)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: AppPalette.softShadow(context),
             blurRadius: 16,
             offset: const Offset(0, 8),
           ),
@@ -1609,7 +1667,7 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
           const SizedBox(height: 6),
           Text(
             "Overall (last 7 days): ${overall.toStringAsFixed(0)}%  •  $totalHabits habits",
-            style: TextStyle(color: Colors.grey[700]),
+            style: TextStyle(color: AppPalette.mutedText(context)),
           ),
           const SizedBox(height: 12),
           LinearProgressIndicator(
@@ -1633,7 +1691,9 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
           return Container(
             height: 180,
             decoration: BoxDecoration(
-              color: Colors.grey[200],
+              color: AppTheme.themeMode.value == ThemeMode.dark
+                  ? const Color(0xFF172338)
+                  : Colors.grey[200],
               borderRadius: BorderRadius.circular(16),
             ),
           );
@@ -1642,9 +1702,15 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
           return Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: Colors.red[50],
+              color: AppTheme.themeMode.value == ThemeMode.dark
+                  ? const Color(0xFF361920)
+                  : Colors.red[50],
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.red[100]!),
+              border: Border.all(
+                color: AppTheme.themeMode.value == ThemeMode.dark
+                    ? const Color(0xFF7F3340)
+                    : Colors.red[100]!,
+              ),
             ),
             child: Row(
               children: [
@@ -1680,7 +1746,7 @@ class _HabitsHeatmap extends StatelessWidget {
     if (dayCompletion.isEmpty) {
       return Text(
         "No habit activity yet.",
-        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+        style: TextStyle(color: AppPalette.mutedText(context), fontSize: 12),
       );
     }
 
@@ -1694,7 +1760,7 @@ class _HabitsHeatmap extends StatelessWidget {
         Text(
           "Last 28 days",
           style: TextStyle(
-            color: Colors.grey[700],
+            color: AppPalette.mutedText(context),
             fontWeight: FontWeight.w600,
           ),
         ),
@@ -1706,7 +1772,15 @@ class _HabitsHeatmap extends StatelessWidget {
             final v = (dayCompletion[k] ?? 0.0).clamp(0.0, 1.0);
 
             // intensity color
-            final c = Color.lerp(Colors.grey[200], primary, v) ?? primary;
+            final c =
+                Color.lerp(
+                  AppPalette.isDark(context)
+                      ? const Color(0xFF22314D)
+                      : Colors.grey[200],
+                  primary,
+                  v,
+                ) ??
+                primary;
 
             return GestureDetector(
               onTap: () {
@@ -1724,7 +1798,7 @@ class _HabitsHeatmap extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: c,
                   borderRadius: BorderRadius.circular(4),
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: AppPalette.border(context)),
                 ),
               ),
             );
@@ -1735,7 +1809,10 @@ class _HabitsHeatmap extends StatelessWidget {
           children: [
             Text(
               "Less",
-              style: TextStyle(color: Colors.grey[600], fontSize: 11),
+              style: TextStyle(
+                color: AppPalette.mutedText(context),
+                fontSize: 11,
+              ),
             ),
             const SizedBox(width: 6),
             _legendBox(context, 0.0),
@@ -1748,7 +1825,10 @@ class _HabitsHeatmap extends StatelessWidget {
             const SizedBox(width: 6),
             Text(
               "More",
-              style: TextStyle(color: Colors.grey[600], fontSize: 11),
+              style: TextStyle(
+                color: AppPalette.mutedText(context),
+                fontSize: 11,
+              ),
             ),
           ],
         ),
@@ -1758,7 +1838,15 @@ class _HabitsHeatmap extends StatelessWidget {
 
   Widget _legendBox(BuildContext context, double v) {
     final primary = Theme.of(context).colorScheme.primary;
-    final c = Color.lerp(Colors.grey[200], primary, v) ?? primary;
+    final c =
+        Color.lerp(
+          AppPalette.isDark(context)
+              ? const Color(0xFF22314D)
+              : Colors.grey[200],
+          primary,
+          v,
+        ) ??
+        primary;
 
     return Container(
       width: 14,
@@ -1766,7 +1854,7 @@ class _HabitsHeatmap extends StatelessWidget {
       decoration: BoxDecoration(
         color: c,
         borderRadius: BorderRadius.circular(3),
-        border: Border.all(color: Colors.grey.shade300),
+        border: Border.all(color: AppPalette.border(context)),
       ),
     );
   }

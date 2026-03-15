@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../theme/app_theme.dart';
 
 class TaskPage extends StatefulWidget {
   const TaskPage({super.key});
@@ -189,7 +190,9 @@ class _TaskPageState extends State<TaskPage> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Scaffold(
+      backgroundColor: AppPalette.background(context),
       appBar: AppBar(title: const Text('My Tasks')),
       body: SafeArea(
         child: Column(
@@ -197,7 +200,21 @@ class _TaskPageState extends State<TaskPage> {
             // 🔹 Date filter row at the top
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Row(
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: AppPalette.surfaceAlt(context),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppPalette.border(context)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppPalette.softShadow(context),
+                      blurRadius: 14,
+                      offset: const Offset(0, 8),
+                    ),
+                  ],
+                ),
+                child: Row(
                 children: [
                   Expanded(
                     child: OutlinedButton.icon(
@@ -242,10 +259,30 @@ class _TaskPageState extends State<TaskPage> {
                     ),
                   ),
                 ],
+                ),
               ),
             ),
 
             // 🔹 Main content (loader / empty / list)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
+              child: Row(
+                children: [
+                  Text(
+                    'Tasks for ${DateFormat('EEE, MMM d').format(_selectedDate)}',
+                    style: theme.textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton.icon(
+                    onPressed: _resetToToday,
+                    icon: const Icon(Icons.today_rounded, size: 18),
+                    label: const Text('Today'),
+                  ),
+                ],
+              ),
+            ),
             Expanded(
               child: _loadingTasks
                   ? const Center(child: CircularProgressIndicator())
@@ -550,7 +587,9 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
                 height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
-                  color: Colors.grey[300],
+                  color: AppPalette.isDark(context)
+                      ? const Color(0xFF314564)
+                      : Colors.grey[300],
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
@@ -1088,6 +1127,7 @@ class _TaskCardState extends State<TaskCard>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final theme = Theme.of(context);
     final title = _task['title'] ?? '';
     final description = (_task['description'] ?? '').toString();
     final label = _task['label'] ?? '';
@@ -1130,10 +1170,11 @@ class _TaskCardState extends State<TaskCard>
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
-        color: Colors.white,
+        color: AppPalette.surfaceAlt(context),
+        border: Border.all(color: AppPalette.border(context)),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: AppPalette.softShadow(context),
             blurRadius: 8,
             offset: const Offset(0, 4),
           ),
@@ -1150,9 +1191,10 @@ class _TaskCardState extends State<TaskCard>
               Expanded(
                 child: Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontWeight: FontWeight.w700,
                     fontSize: 16,
+                    color: theme.colorScheme.onSurface,
                   ),
                 ),
               ),
@@ -1165,7 +1207,10 @@ class _TaskCardState extends State<TaskCard>
               description,
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.grey[700], fontSize: 13),
+              style: TextStyle(
+                color: AppPalette.mutedText(context),
+                fontSize: 13,
+              ),
             ),
             const SizedBox(height: 6),
           ],
@@ -1191,7 +1236,10 @@ class _TaskCardState extends State<TaskCard>
               if (estimated != null)
                 Text(
                   'Est: $estimated min',
-                  style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppPalette.mutedText(context),
+                  ),
                 ),
             ],
           ),
@@ -1209,7 +1257,7 @@ class _TaskCardState extends State<TaskCard>
                       'Spent: ${_formatDuration(_elapsed)}',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey[600],
+                        color: AppPalette.mutedText(context),
                         decoration:
                             TextDecoration.none, // optional hint it's tappable
                       ),

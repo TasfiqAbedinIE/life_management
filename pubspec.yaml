@@ -48,6 +48,7 @@ dependencies:
   dio: ^5.9.1
   pdfx: ^2.9.2
   flutter_epub_viewer: ^1.2.8
+  shared_preferences: ^2.5.3
 
 dev_dependencies:
   flutter_test:
@@ -129,3 +130,5 @@ flutter_launcher_icons:
   android: true
   ios: true
   image_path: "assets/icon/app_icon.png"
+
+

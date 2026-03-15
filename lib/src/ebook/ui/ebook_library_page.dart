@@ -11,8 +11,7 @@ import '../data/models/ebook.dart';
 import '../data/models/ebook_user_state.dart';
 import 'epub_reader_page.dart';
 import 'pdf_reader_page.dart';
-
-enum _LibraryFilter { all, offline, inProgress, pdf, epub }
+import '../../theme/app_theme.dart';
 
 class EbookLibraryPage extends StatefulWidget {
   const EbookLibraryPage({super.key});
@@ -29,7 +28,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
   late Future<_EbookLibraryData> _future;
   String? _openingBookId;
   final Map<String, double> _downloadProgress = {};
-  _LibraryFilter _filter = _LibraryFilter.all;
+  String _selectedTag = 'All';
 
   @override
   void initState() {
@@ -90,6 +89,16 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(ebook.author),
+                if (ebook.tags.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: ebook.tags
+                        .map((tag) => _tinyBadge(tag, const Color(0xFF2563EB)))
+                        .toList(),
+                  ),
+                ],
                 const SizedBox(height: 14),
                 if (progress > 0 && progress < 1)
                   ListTile(
@@ -336,6 +345,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
               sourceUrl: remoteUrl,
               localFilePath: localPath,
               initialProgress: initialProgress,
+              resumeKey: ebook.id,
               onProgressChanged: (progress) {
                 unawaited(_saveProgress(ebook, state, progress));
               },
@@ -381,132 +391,47 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
     );
   }
 
+  List<String> _availableTags(List<Ebook> ebooks) {
+    final tags = <String>{};
+    for (final ebook in ebooks) {
+      tags.addAll(ebook.tags);
+    }
+
+    final sorted = tags.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    return ['All', ...sorted];
+  }
+
   List<Ebook> _visibleEbooks(_EbookLibraryData data) {
     final query = _searchCtrl.text.trim().toLowerCase();
     return data.ebooks.where((ebook) {
-      final state = data.userStates[ebook.id];
       final matchesQuery =
           query.isEmpty ||
           ebook.title.toLowerCase().contains(query) ||
-          ebook.author.toLowerCase().contains(query);
+          ebook.author.toLowerCase().contains(query) ||
+          ebook.tags.any((tag) => tag.toLowerCase().contains(query));
 
       if (!matchesQuery) return false;
-
-      switch (_filter) {
-        case _LibraryFilter.all:
-          return true;
-        case _LibraryFilter.offline:
-          return state?.downloaded == true;
-        case _LibraryFilter.inProgress:
-          final p = state?.progress ?? 0;
-          return p > 0 && p < 1;
-        case _LibraryFilter.pdf:
-          return ebook.fileType.toLowerCase() == 'pdf';
-        case _LibraryFilter.epub:
-          return ebook.fileType.toLowerCase() == 'epub';
-      }
+      if (_selectedTag == 'All') return true;
+      return ebook.tags.any((tag) => tag.toLowerCase() == _selectedTag.toLowerCase());
     }).toList();
   }
 
-  Widget _topHeader(_EbookLibraryData data) {
-    final total = data.ebooks.length;
-    final offline = data.userStates.values.where((s) => s.downloaded).length;
-    final reading = data.userStates.values
-        .where((s) => s.progress > 0 && s.progress < 1)
-        .length;
-
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0F172A), Color(0xFF1E3A8A), Color(0xFF0EA5E9)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Digital Library',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 24,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.4,
-            ),
-          ),
-          const SizedBox(height: 8),
-          // const Text(
-          //   'Read online or offline, and continue where you stopped.',
-          //   style: TextStyle(color: Colors.white70),
-          // ),
-          // const SizedBox(height: 14),
-          Row(
-            children: [
-              _statChip('Books', '$total'),
-              const SizedBox(width: 8),
-              _statChip('Offline', '$offline'),
-              const SizedBox(width: 8),
-              _statChip('Reading', '$reading'),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _statChip(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        '$label: $value',
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
-        ),
-      ),
-    );
-  }
-
-  Widget _filterChips() {
-    final labels = <_LibraryFilter, String>{
-      _LibraryFilter.all: 'All',
-      _LibraryFilter.offline: 'Offline',
-      _LibraryFilter.inProgress: 'In Progress',
-      _LibraryFilter.pdf: 'PDF',
-      _LibraryFilter.epub: 'EPUB',
-    };
-
+  Widget _tagChips(List<String> tags) {
     return SizedBox(
       height: 42,
-      child: ListView(
+      child: ListView.separated(
         padding: const EdgeInsets.symmetric(horizontal: 16),
         scrollDirection: Axis.horizontal,
-        children: labels.entries.map((entry) {
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(entry.value),
-              selected: _filter == entry.key,
-              onSelected: (_) => setState(() => _filter = entry.key),
-            ),
+        itemBuilder: (context, index) {
+          final tag = tags[index];
+          return ChoiceChip(
+            label: Text(tag),
+            selected: _selectedTag == tag,
+            onSelected: (_) => setState(() => _selectedTag = tag),
           );
-        }).toList(),
+        },
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemCount: tags.length,
       ),
     );
   }
@@ -517,6 +442,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
     required bool opening,
     required double? downloading,
   }) {
+    final isDark = AppPalette.isDark(context);
     final isPdf = ebook.fileType.toLowerCase() == 'pdf';
     final typeColor = isPdf ? const Color(0xFFEF4444) : const Color(0xFF06B6D4);
     final progress = ((state?.progress ?? 0.0) * 100).clamp(0, 100).toDouble();
@@ -528,12 +454,12 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
         margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppPalette.surfaceAlt(context),
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
+          border: Border.all(color: AppPalette.border(context)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withValues(alpha: 0.05),
+              color: AppPalette.softShadow(context),
               blurRadius: 10,
               offset: const Offset(0, 5),
             ),
@@ -574,7 +500,11 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                     ebook.author,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.black54),
+                    style: TextStyle(
+                      color: isDark
+                          ? const Color(0xFF9FB0CC)
+                          : Colors.black54,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Wrap(
@@ -589,6 +519,9 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                           '${progress.toStringAsFixed(0)}%',
                           const Color(0xFF2563EB),
                         ),
+                      ...ebook.tags.take(2).map(
+                        (tag) => _tinyBadge(tag, const Color(0xFF64748B)),
+                      ),
                     ],
                   ),
                   if (downloading != null || progress > 0) ...[
@@ -612,7 +545,10 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                       value: downloading,
                     ),
                   )
-                : const Icon(Icons.chevron_right_rounded),
+                : Icon(
+                    Icons.chevron_right_rounded,
+                    color: isDark ? const Color(0xFF9FB0CC) : null,
+                  ),
           ],
         ),
       ),
@@ -640,8 +576,11 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF3F4F6),
-      appBar: AppBar(title: const Text('E-Book Library'), centerTitle: true),
+      backgroundColor: AppPalette.background(context),
+      appBar: AppBar(
+        title: const Text('E-Book Library'),
+        centerTitle: true,
+      ),
       body: FutureBuilder<_EbookLibraryData>(
         future: _future,
         builder: (context, snapshot) {
@@ -668,24 +607,27 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
           }
 
           final data = snapshot.data!;
+          final tags = _availableTags(data.ebooks);
+          if (!tags.contains(_selectedTag)) {
+            _selectedTag = 'All';
+          }
           final visible = _visibleEbooks(data);
 
           return RefreshIndicator(
             onRefresh: _refresh,
             child: ListView(
-              padding: const EdgeInsets.only(bottom: 22),
+              padding: const EdgeInsets.only(top: 16, bottom: 22),
               children: [
-                _topHeader(data),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: TextField(
                     controller: _searchCtrl,
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
-                      hintText: 'Search by title or author...',
+                      hintText: 'Search by title, author, or tag...',
                       prefixIcon: const Icon(Icons.search),
                       filled: true,
-                      fillColor: Colors.white,
+                      fillColor: AppPalette.surfaceAlt(context),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(14),
                         borderSide: BorderSide.none,
@@ -693,8 +635,8 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 10),
-                _filterChips(),
+                const SizedBox(height: 12),
+                _tagChips(tags),
                 const SizedBox(height: 8),
                 if (visible.isEmpty)
                   const Padding(

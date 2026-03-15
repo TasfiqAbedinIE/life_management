@@ -33,6 +33,9 @@ class _PdfReaderPageState extends State<PdfReaderPage> {
   int _pagesCount = 0;
   int _currentPage = 1;
   bool _showHud = true;
+  String _hudFontFamily = 'Georgia';
+  double _hudFontScale = 1.0;
+  _PdfReaderPalette _palette = _PdfReaderPalette.midnight;
 
   @override
   void initState() {
@@ -121,19 +124,26 @@ class _PdfReaderPageState extends State<PdfReaderPage> {
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
+    final palette = _palette.colors;
+    final progress = _pagesCount > 0 ? _currentPage / _pagesCount : 0.0;
+
     return Scaffold(
+      backgroundColor: palette.background,
       appBar: AppBar(
-        title: Text(widget.title, overflow: TextOverflow.ellipsis),
+        backgroundColor: palette.background,
+        title: Text(
+          widget.title,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontFamily: _hudFontFamily,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         actions: [
           IconButton(
             tooltip: 'Jump to page',
             onPressed: _openJumpDialog,
             icon: const Icon(Icons.find_in_page_outlined),
-          ),
-          IconButton(
-            tooltip: _showHud ? 'Hide controls' : 'Show controls',
-            onPressed: () => setState(() => _showHud = !_showHud),
-            icon: Icon(_showHud ? Icons.visibility_off : Icons.visibility),
           ),
         ],
       ),
@@ -154,66 +164,182 @@ class _PdfReaderPageState extends State<PdfReaderPage> {
 
           return Stack(
             children: [
-              GestureDetector(
-                onTap: () => setState(() => _showHud = !_showHud),
-                child: PdfView(
-                  controller: controller,
-                  onDocumentLoaded: (doc) {
-                    _pagesCount = doc.pagesCount;
-                    final initialPage = (_pagesCount * widget.initialProgress)
-                        .round()
-                        .clamp(1, _pagesCount);
-                    controller.jumpToPage(initialPage);
-                  },
-                  onPageChanged: (page) {
-                    setState(() => _currentPage = page);
+              Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [palette.background, palette.backgroundAccent],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: Container(
+                      color: palette.pageFrame,
+                      child: PdfView(
+                        controller: controller,
+                        onDocumentLoaded: (doc) {
+                          _pagesCount = doc.pagesCount;
+                          final initialPage = (_pagesCount * widget.initialProgress)
+                              .round()
+                              .clamp(1, _pagesCount);
+                          controller.jumpToPage(initialPage);
+                        },
+                        onPageChanged: (page) {
+                          setState(() => _currentPage = page);
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              Positioned.fill(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.translucent,
+                  onTapUp: (details) {
+                    final width = MediaQuery.of(context).size.width;
+                    final height = MediaQuery.of(context).size.height;
+                    final xRatio = details.localPosition.dx / width;
+                    final yRatio = details.localPosition.dy / height;
+                    final inMiddleBand =
+                        xRatio >= 0.30 &&
+                        xRatio <= 0.70 &&
+                        yRatio >= 0.18 &&
+                        yRatio <= 0.82;
+                    if (inMiddleBand) {
+                      setState(() => _showHud = !_showHud);
+                    }
                   },
                 ),
               ),
               AnimatedPositioned(
                 duration: const Duration(milliseconds: 220),
                 curve: Curves.easeOut,
-                left: 12,
-                right: 12,
-                bottom: _showHud ? 14 : -220,
+                left: 14,
+                right: 14,
+                bottom: _showHud ? 16 : -320,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.78),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                    gradient: LinearGradient(
+                      colors: [palette.hudTop, palette.hudBottom],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: palette.hudBorder),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.22),
+                        blurRadius: 20,
+                        offset: const Offset(0, 12),
+                      ),
+                    ],
                   ),
                   child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 14),
                     child: Column(
                       mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
                           children: [
-                            const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 18),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: LinearProgressIndicator(
-                                value: _pagesCount > 0 ? _currentPage / _pagesCount : 0,
-                                minHeight: 7,
-                                borderRadius: BorderRadius.circular(999),
-                                color: Colors.redAccent,
-                                backgroundColor: Colors.white24,
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                color: palette.accent.withValues(alpha: 0.18),
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Icon(
+                                Icons.picture_as_pdf_rounded,
+                                color: palette.accent,
+                                size: 20,
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Text(
-                              _pagesCount > 0 ? '$_currentPage / $_pagesCount' : '--',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.w700,
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Reader HUD',
+                                    style: TextStyle(
+                                      color: palette.primaryText,
+                                      fontFamily: _hudFontFamily,
+                                      fontSize: 18 * _hudFontScale,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    'Tap the middle of the screen to show or hide this panel.',
+                                    style: TextStyle(
+                                      color: palette.secondaryText,
+                                      fontFamily: _hudFontFamily,
+                                      fontSize: 11 * _hudFontScale,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 8,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.08),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: Text(
+                                _pagesCount > 0
+                                    ? '${(progress * 100).toStringAsFixed(0)}%'
+                                    : '--',
+                                style: TextStyle(
+                                  color: palette.primaryText,
+                                  fontFamily: _hudFontFamily,
+                                  fontSize: 14 * _hudFontScale,
+                                  fontWeight: FontWeight.w800,
+                                ),
                               ),
                             ),
                           ],
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            _metricPill(
+                              label: 'Page',
+                              value: _pagesCount > 0 ? '$_currentPage / $_pagesCount' : '--',
+                            ),
+                            const SizedBox(width: 8),
+                            _metricPill(label: 'Mode', value: _palette.label),
+                            const SizedBox(width: 8),
+                            _metricPill(
+                              label: 'Font',
+                              value: _fontLabel(_hudFontFamily),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        LinearProgressIndicator(
+                          value: progress,
+                          minHeight: 8,
+                          borderRadius: BorderRadius.circular(999),
+                          color: palette.accent,
+                          backgroundColor: Colors.white.withValues(alpha: 0.12),
+                        ),
+                        const SizedBox(height: 10),
                         SliderTheme(
                           data: SliderTheme.of(context).copyWith(
                             trackHeight: 4,
+                            activeTrackColor: palette.accent,
+                            inactiveTrackColor: Colors.white.withValues(alpha: 0.12),
+                            thumbColor: palette.accent,
+                            overlayColor: palette.accent.withValues(alpha: 0.12),
                             thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
                           ),
                           child: Slider(
@@ -230,36 +356,112 @@ class _PdfReaderPageState extends State<PdfReaderPage> {
                             },
                           ),
                         ),
+                        const SizedBox(height: 8),
                         Row(
                           children: [
-                            _miniIcon(
-                              icon: Icons.skip_previous_rounded,
-                              onTap: () async {
-                                if (_currentPage <= 1) return;
-                                await controller.previousPage(
-                                  duration: const Duration(milliseconds: 180),
-                                  curve: Curves.easeOut,
-                                );
-                              },
-                            ),
-                            _miniIcon(
-                              icon: Icons.skip_next_rounded,
-                              onTap: () async {
-                                if (_pagesCount == 0 || _currentPage >= _pagesCount) return;
-                                await controller.nextPage(
-                                  duration: const Duration(milliseconds: 180),
-                                  curve: Curves.easeOut,
-                                );
-                              },
-                            ),
-                            const Spacer(),
+                            Expanded(child: _sectionLabel('Display')),
                             TextButton.icon(
                               onPressed: _openJumpDialog,
                               icon: const Icon(Icons.find_in_page_outlined),
                               label: const Text('Jump'),
-                              style: TextButton.styleFrom(foregroundColor: Colors.white),
+                              style: TextButton.styleFrom(
+                                foregroundColor: palette.primaryText,
+                              ),
                             ),
                           ],
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            _choiceChip(
+                              label: 'Modern',
+                              selected: _hudFontFamily == 'Outfit',
+                              onTap: () => setState(() => _hudFontFamily = 'Outfit'),
+                            ),
+                            _choiceChip(
+                              label: 'Serif',
+                              selected: _hudFontFamily == 'Georgia',
+                              onTap: () => setState(() => _hudFontFamily = 'Georgia'),
+                            ),
+                            _choiceChip(
+                              label: 'Mono',
+                              selected: _hudFontFamily == 'Courier',
+                              onTap: () => setState(() => _hudFontFamily = 'Courier'),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            _miniIcon(
+                              icon: Icons.text_decrease_rounded,
+                              onTap: () {
+                                setState(() {
+                                  _hudFontScale = (_hudFontScale - 0.1).clamp(0.85, 1.35);
+                                });
+                              },
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: SliderTheme(
+                                data: SliderTheme.of(context).copyWith(
+                                  trackHeight: 4,
+                                  activeTrackColor: palette.accent,
+                                  inactiveTrackColor:
+                                      Colors.white.withValues(alpha: 0.12),
+                                  thumbColor: palette.accent,
+                                ),
+                                child: Slider(
+                                  value: _hudFontScale,
+                                  min: 0.85,
+                                  max: 1.35,
+                                  onChanged: (value) {
+                                    setState(() => _hudFontScale = value);
+                                  },
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            _miniIcon(
+                              icon: Icons.text_increase_rounded,
+                              onTap: () {
+                                setState(() {
+                                  _hudFontScale = (_hudFontScale + 0.1).clamp(0.85, 1.35);
+                                });
+                              },
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        _sectionLabel('Atmosphere'),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final paletteOption in _PdfReaderPalette.values)
+                              _paletteChip(paletteOption),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.06),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            'This PDF renderer supports page rendering and navigation, but not real PDF text reflow, font replacement, or built-in text marking. For selectable highlights, we would need a different PDF stack.',
+                            style: TextStyle(
+                              color: palette.secondaryText,
+                              fontFamily: _hudFontFamily,
+                              fontSize: 11 * _hudFontScale,
+                              height: 1.35,
+                            ),
+                          ),
                         ),
                       ],
                     ),
@@ -278,8 +480,8 @@ class _PdfReaderPageState extends State<PdfReaderPage> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(999),
       child: Container(
-        width: 34,
-        height: 34,
+        width: 36,
+        height: 36,
         decoration: BoxDecoration(
           color: Colors.white.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(999),
@@ -288,4 +490,215 @@ class _PdfReaderPageState extends State<PdfReaderPage> {
       ),
     );
   }
+
+  Widget _metricPill({required String label, required String value}) {
+    final palette = _palette.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              color: palette.secondaryText,
+              fontFamily: _hudFontFamily,
+              fontSize: 10 * _hudFontScale,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: TextStyle(
+              color: palette.primaryText,
+              fontFamily: _hudFontFamily,
+              fontSize: 13 * _hudFontScale,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _choiceChip({
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final palette = _palette.colors;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? palette.accent.withValues(alpha: 0.18)
+              : Colors.white.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? palette.accent : Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: palette.primaryText,
+            fontFamily: _hudFontFamily,
+            fontSize: 12 * _hudFontScale,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _paletteChip(_PdfReaderPalette paletteOption) {
+    final selected = _palette == paletteOption;
+    final optionColors = paletteOption.colors;
+    return InkWell(
+      onTap: () => setState(() => _palette = paletteOption),
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: selected
+              ? Colors.white.withValues(alpha: 0.12)
+              : Colors.white.withValues(alpha: 0.05),
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? optionColors.accent : Colors.white.withValues(alpha: 0.08),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 12,
+              height: 12,
+              decoration: BoxDecoration(
+                color: optionColors.accent,
+                shape: BoxShape.circle,
+              ),
+            ),
+            const SizedBox(width: 8),
+            Text(
+              paletteOption.label,
+              style: TextStyle(
+                color: _palette.colors.primaryText,
+                fontFamily: _hudFontFamily,
+                fontSize: 12 * _hudFontScale,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionLabel(String text) {
+    return Text(
+      text,
+      style: TextStyle(
+        color: _palette.colors.secondaryText,
+        fontFamily: _hudFontFamily,
+        fontSize: 11 * _hudFontScale,
+        fontWeight: FontWeight.w700,
+        letterSpacing: 0.4,
+      ),
+    );
+  }
+
+  String _fontLabel(String family) {
+    switch (family) {
+      case 'Outfit':
+        return 'Modern';
+      case 'Courier':
+        return 'Mono';
+      default:
+        return 'Serif';
+    }
+  }
+}
+
+enum _PdfReaderPalette {
+  midnight('Midnight'),
+  ember('Ember'),
+  forest('Forest');
+
+  const _PdfReaderPalette(this.label);
+
+  final String label;
+
+  _PdfPaletteColors get colors {
+    switch (this) {
+      case _PdfReaderPalette.midnight:
+        return const _PdfPaletteColors(
+          background: Color(0xFF0B1020),
+          backgroundAccent: Color(0xFF1F2A44),
+          pageFrame: Color(0xFFE5ECF6),
+          hudTop: Color(0xFF111827),
+          hudBottom: Color(0xFF1F2937),
+          hudBorder: Color(0x334B5563),
+          accent: Color(0xFF60A5FA),
+          primaryText: Color(0xFFF8FAFC),
+          secondaryText: Color(0xFFCBD5E1),
+        );
+      case _PdfReaderPalette.ember:
+        return const _PdfPaletteColors(
+          background: Color(0xFF2B1711),
+          backgroundAccent: Color(0xFF5B211A),
+          pageFrame: Color(0xFFF6EBDD),
+          hudTop: Color(0xFF3B1410),
+          hudBottom: Color(0xFF6B241B),
+          hudBorder: Color(0x33F59E0B),
+          accent: Color(0xFFF59E0B),
+          primaryText: Color(0xFFFFF7ED),
+          secondaryText: Color(0xFFFED7AA),
+        );
+      case _PdfReaderPalette.forest:
+        return const _PdfPaletteColors(
+          background: Color(0xFF0F1D18),
+          backgroundAccent: Color(0xFF1E4633),
+          pageFrame: Color(0xFFEAF4EC),
+          hudTop: Color(0xFF10261D),
+          hudBottom: Color(0xFF1D3A2D),
+          hudBorder: Color(0x3334D399),
+          accent: Color(0xFF34D399),
+          primaryText: Color(0xFFF0FDF4),
+          secondaryText: Color(0xFFBBF7D0),
+        );
+    }
+  }
+}
+
+class _PdfPaletteColors {
+  const _PdfPaletteColors({
+    required this.background,
+    required this.backgroundAccent,
+    required this.pageFrame,
+    required this.hudTop,
+    required this.hudBottom,
+    required this.hudBorder,
+    required this.accent,
+    required this.primaryText,
+    required this.secondaryText,
+  });
+
+  final Color background;
+  final Color backgroundAccent;
+  final Color pageFrame;
+  final Color hudTop;
+  final Color hudBottom;
+  final Color hudBorder;
+  final Color accent;
+  final Color primaryText;
+  final Color secondaryText;
 }

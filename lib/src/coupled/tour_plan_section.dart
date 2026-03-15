@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'couple_repository.dart';
 import 'tour_plan_bottom_sheet.dart';
+import '../theme/app_theme.dart';
 
 class TourPlanSection extends StatefulWidget {
   final String coupleId;
@@ -38,19 +39,25 @@ class _TourPlanSectionState extends State<TourPlanSection> {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = AppPalette.isDark(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
-        color: Colors.white.withOpacity(0.95),
-        border: Border.all(color: Colors.pinkAccent.withOpacity(0.4)),
+        color: isDark ? const Color(0xFF221729) : Colors.white.withValues(alpha: 0.95),
+        border: Border.all(
+          color: isDark ? const Color(0xFF6B466F) : Colors.pinkAccent.withValues(alpha: 0.4),
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Icon(Icons.travel_explore, color: Colors.pink),
+              Icon(
+                Icons.travel_explore,
+                color: isDark ? const Color(0xFFFF8FB1) : Colors.pink,
+              ),
               const SizedBox(width: 8),
               const Expanded(
                 child: Text(
@@ -59,7 +66,10 @@ class _TourPlanSectionState extends State<TourPlanSection> {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.add_circle, color: Colors.pink),
+                icon: Icon(
+                  Icons.add_circle,
+                  color: isDark ? const Color(0xFFFF8FB1) : Colors.pink,
+                ),
                 onPressed: () async {
                   await showTourPlanBottomSheet(
                     context: context,
@@ -82,7 +92,11 @@ class _TourPlanSectionState extends State<TourPlanSection> {
               padding: const EdgeInsets.only(top: 12),
               child: Text(
                 'No tour planned yet.\nStart dreaming together 🌍💞',
-                style: TextStyle(color: Colors.grey.shade700),
+                style: TextStyle(
+                  color: AppPalette.isDark(context)
+                      ? const Color(0xFFD8B9CB)
+                      : Colors.grey.shade700,
+                ),
               ),
             )
           else

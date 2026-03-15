@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'couple_repository.dart';
 import 'tour_plan_section.dart';
+import '../theme/app_theme.dart';
 
 class CoupledDashboardPage extends StatefulWidget {
   const CoupledDashboardPage({super.key});
@@ -108,6 +109,20 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
   Widget build(BuildContext context) {
     final bgImage = 'assets/coupled_images/couple-1.png';
     final counterImage = 'assets/coupled_images/couple-3.png';
+    final isDark = AppPalette.isDark(context);
+    final shellGradient = isDark
+        ? const [Color(0xFF180E1A), Color(0xFF2A1533)]
+        : const [Color(0xFFFFC1CC), Color(0xFFFFE4E1)];
+    final cardColor = isDark
+        ? const Color(0xFF221729)
+        : Colors.white.withValues(alpha: 0.92);
+    final borderColor = isDark
+        ? const Color(0xFF6B466F)
+        : Colors.pinkAccent.withValues(alpha: 0.5);
+    final accentColor = isDark ? const Color(0xFFFF8FB1) : Colors.pink.shade700;
+    final mutedText = isDark
+        ? const Color(0xFFD8B9CB)
+        : Colors.grey.shade700;
 
     final timeParts = _formatElapsed(_elapsed);
 
@@ -119,13 +134,13 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
         ),
         backgroundColor: Colors.transparent,
         elevation: 0,
-        foregroundColor: Colors.pink.shade700,
+        foregroundColor: accentColor,
       ),
       extendBodyBehindAppBar: true,
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
-            colors: [Color(0xFFFFC1CC), Color(0xFFFFE4E1)],
+            colors: shellGradient,
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
           ),
@@ -162,32 +177,31 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                               padding: const EdgeInsets.all(18),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(24),
-                                color: Colors.white.withOpacity(0.9),
+                                color: cardColor,
                                 boxShadow: [
                                   BoxShadow(
                                     blurRadius: 16,
                                     spreadRadius: 1,
-                                    color: Colors.pinkAccent.withOpacity(0.25),
+                                    color: Colors.black.withValues(alpha: 0.18),
                                     offset: const Offset(0, 10),
                                   ),
                                 ],
-                                border: Border.all(
-                                  color: Colors.pinkAccent.withOpacity(0.5),
-                                ),
+                                border: Border.all(color: borderColor),
                               ),
                               child: Row(
                                 children: [
-                                  const Icon(
+                                  Icon(
                                     Icons.favorite,
-                                    color: Colors.pink,
+                                    color: accentColor,
                                   ),
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
                                       _romanticMessage,
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 16,
                                         fontWeight: FontWeight.w500,
+                                        color: Theme.of(context).colorScheme.onSurface,
                                       ),
                                     ),
                                   ),
@@ -203,18 +217,16 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                             padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(24),
-                              color: Colors.white.withOpacity(0.95),
+                              color: cardColor,
                               boxShadow: [
                                 BoxShadow(
                                   blurRadius: 18,
                                   spreadRadius: 2,
-                                  color: Colors.pink.withOpacity(0.25),
+                                  color: Colors.black.withValues(alpha: 0.2),
                                   offset: const Offset(0, 12),
                                 ),
                               ],
-                              border: Border.all(
-                                color: Colors.pinkAccent.withOpacity(0.5),
-                              ),
+                              border: Border.all(color: borderColor),
                             ),
                             child: Row(
                               children: [
@@ -249,7 +261,7 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                                           'Since ${_relationshipDate!.toLocal().toString().split(' ').first}',
                                           style: TextStyle(
                                             fontSize: 13,
-                                            color: Colors.grey.shade700,
+                                            color: mutedText,
                                           ),
                                         )
                                       else
@@ -257,7 +269,9 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                                           'Anniversary date not set',
                                           style: TextStyle(
                                             fontSize: 13,
-                                            color: Colors.red.shade400,
+                                            color: isDark
+                                                ? const Color(0xFFFF9DA9)
+                                                : Colors.red.shade400,
                                           ),
                                         ),
                                       const SizedBox(height: 12),
@@ -310,8 +324,17 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
   }
 
   Widget _buildTimerRow(_TimeParts t) {
-    TextStyle labelStyle = TextStyle(fontSize: 12, color: Colors.grey.shade700);
-    const valueStyle = TextStyle(fontSize: 20, fontWeight: FontWeight.bold);
+    final isDark = AppTheme.themeMode.value == ThemeMode.dark;
+    final accentColor = isDark ? const Color(0xFFFF8FB1) : Colors.pink.shade700;
+    final labelStyle = TextStyle(
+      fontSize: 12,
+      color: isDark ? const Color(0xFFD8B9CB) : Colors.grey.shade700,
+    );
+    final valueStyle = TextStyle(
+      fontSize: 20,
+      fontWeight: FontWeight.bold,
+      color: isDark ? Colors.white : null,
+    );
 
     String two(int n) => n.toString().padLeft(2, '0');
 
@@ -332,7 +355,7 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
         const SizedBox(height: 4),
         Text(
           'Counting every heartbeat together 💗',
-          style: TextStyle(fontSize: 12, color: Colors.pink.shade700),
+          style: TextStyle(fontSize: 12, color: accentColor),
         ),
       ],
     );

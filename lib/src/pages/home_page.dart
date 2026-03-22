@@ -9,6 +9,7 @@ import 'dart:async';
 import 'shopping_list_home_page.dart';
 import '../coupled/coupled_request_page.dart';
 import '../habits/presentation/habits_page.dart';
+import '../habits/widget/habit_widget_service.dart';
 import '../notes/pages/notes_list_page.dart';
 import '../ebook/ui/ebook_library_page.dart';
 import '../budgeting/presentation/budgeting_page.dart';
@@ -42,6 +43,11 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _now = DateTime.now();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      HabitWidgetService.consumeLaunchIntent(context);
+      unawaited(HabitWidgetService.sync());
+    });
 
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted) return;
@@ -542,6 +548,7 @@ class _HomePageState extends State<HomePage> {
 
   void _signOut() async {
     await Supabase.instance.client.auth.signOut();
+    await HabitWidgetService.sync();
     if (!mounted) return;
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const SignInPage()),
@@ -1435,6 +1442,8 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
             .update({'done_count': newToday})
             .eq('id', id);
       }
+
+      await HabitWidgetService.sync();
     } catch (e) {
       if (!mounted) return;
 

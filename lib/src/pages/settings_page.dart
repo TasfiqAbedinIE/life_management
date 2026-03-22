@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/habit_notification_service.dart';
 import '../theme/app_theme.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -24,6 +25,10 @@ class _SettingsPageState extends State<SettingsPage> {
   TimeOfDay? _personalStart;
   TimeOfDay? _personalEnd;
 
+  bool _habitNotificationsEnabled = false;
+  TimeOfDay _habitNotificationStart = const TimeOfDay(hour: 11, minute: 0);
+  int _habitNotificationIntervalHours = 8;
+
   @override
   void initState() {
     super.initState();
@@ -31,6 +36,13 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _loadSettings() async {
+    final notificationSettings = await HabitNotificationService.loadSettings();
+    _habitNotificationsEnabled = notificationSettings.enabled;
+    _habitNotificationStart = _timeFromMinutes(
+      notificationSettings.startMinutes,
+    );
+    _habitNotificationIntervalHours = notificationSettings.intervalHours;
+
     final user = supabase.auth.currentUser;
     if (user == null) {
       setState(() => _loading = false);
@@ -85,6 +97,13 @@ class _SettingsPageState extends State<SettingsPage> {
     return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
   }
 
+  TimeOfDay _timeFromMinutes(int totalMinutes) {
+    final normalized = totalMinutes % (24 * 60);
+    return TimeOfDay(hour: normalized ~/ 60, minute: normalized % 60);
+  }
+
+  int _minutesFromTime(TimeOfDay time) => (time.hour * 60) + time.minute;
+
   Future<void> _pickTime(
     ValueChanged<TimeOfDay?> setter,
     TimeOfDay? initial,
@@ -106,8 +125,38 @@ class _SettingsPageState extends State<SettingsPage> {
     setState(() => _loading = true);
 
     final themeStr = _isDark ? 'dark' : 'light';
+    final notificationSettings = HabitNotificationSettings(
+      enabled: _habitNotificationsEnabled,
+      startMinutes: _minutesFromTime(_habitNotificationStart),
+      intervalHours: _habitNotificationIntervalHours,
+    );
+    var remoteSaveSucceeded = false;
 
     try {
+      if (notificationSettings.enabled) {
+        final allowed = await HabitNotificationService.areNotificationsAllowed();
+        final granted = allowed
+            ? true
+            : await HabitNotificationService.requestPermission();
+
+        if (!granted) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Notification permission is needed to show habit reminders.',
+                ),
+              ),
+            );
+          }
+          setState(() => _loading = false);
+          return;
+        }
+      }
+
+      await HabitNotificationService.saveSettings(notificationSettings);
+      await HabitNotificationService.applySchedule(notificationSettings);
+
       await supabase.from('user_settings').upsert({
         'user_id': user.id,
         'theme_mode': themeStr,
@@ -117,6 +166,7 @@ class _SettingsPageState extends State<SettingsPage> {
         'personal_start': _toStorage(_personalStart),
         'personal_end': _toStorage(_personalEnd),
       }, onConflict: 'user_id');
+      remoteSaveSucceeded = true;
 
       // Apply theme immediately in app
       AppTheme.themeMode.value = _isDark ? ThemeMode.dark : ThemeMode.light;
@@ -124,13 +174,29 @@ class _SettingsPageState extends State<SettingsPage> {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(const SnackBar(content: Text('Settings saved')));
+        ).showSnackBar(
+          SnackBar(
+            content: Text(
+              remoteSaveSucceeded
+                  ? 'Settings saved'
+                  : 'Habit reminders updated locally',
+            ),
+          ),
+        );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(
           context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save: $e')));
+        ).showSnackBar(
+          SnackBar(
+            content: Text(
+              remoteSaveSucceeded
+                  ? 'Failed to finish saving: $e'
+                  : 'Habit reminders updated locally, but cloud settings failed: $e',
+            ),
+          ),
+        );
       }
     } finally {
       if (mounted) setState(() => _loading = false);
@@ -140,6 +206,30 @@ class _SettingsPageState extends State<SettingsPage> {
   final _fonts = ["Delius", "ShareTech", "Carattere", "HanaleiFill", "Outfit"];
 
   String _selectedFont = "Delius";
+
+  List<String> _notificationPreview() {
+    final results = <String>[];
+    final startMinutes = _minutesFromTime(_habitNotificationStart);
+    final nowMinutes = _minutesFromTime(TimeOfDay.fromDateTime(DateTime.now()));
+
+    var nextMinutes = startMinutes;
+    while (nextMinutes <= nowMinutes) {
+      nextMinutes += _habitNotificationIntervalHours * 60;
+    }
+
+    for (var i = 0; i < 3; i++) {
+      final totalMinutes = (nextMinutes + (i * _habitNotificationIntervalHours * 60)) %
+          (24 * 60);
+      results.add(
+        MaterialLocalizations.of(context).formatTimeOfDay(
+          _timeFromMinutes(totalMinutes),
+          alwaysUse24HourFormat: false,
+        ),
+      );
+    }
+
+    return results;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -182,6 +272,146 @@ class _SettingsPageState extends State<SettingsPage> {
                       AppTheme.fontFamily.value = value;
                     }
                   },
+                ),
+
+                const SizedBox(height: 24),
+
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: _isDark
+                          ? const [Color(0xFF1A2440), Color(0xFF243A63)]
+                          : const [Color(0xFFEFF5FF), Color(0xFFDDEBFF)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: _isDark
+                          ? const Color(0xFF35507F)
+                          : const Color(0xFFB9D2FF),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            width: 42,
+                            height: 42,
+                            decoration: BoxDecoration(
+                              color: _isDark
+                                  ? Colors.white.withValues(alpha: 0.12)
+                                  : Colors.white.withValues(alpha: 0.72),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            child: Icon(
+                              Icons.notifications_active_rounded,
+                              color: _isDark
+                                  ? const Color(0xFFB8CFFF)
+                                  : const Color(0xFF2457C5),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Habit reminder notifications',
+                                  style: Theme.of(context).textTheme.titleMedium
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Offline reminders that open the habits module directly.',
+                                  style: TextStyle(
+                                    color: _isDark
+                                        ? const Color(0xFFC9D6F2)
+                                        : const Color(0xFF35558A),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Enable habit reminders'),
+                        subtitle: const Text(
+                          'Turn daily reminder notifications on or off.',
+                        ),
+                        value: _habitNotificationsEnabled,
+                        onChanged: (value) {
+                          setState(() => _habitNotificationsEnabled = value);
+                        },
+                      ),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.schedule_rounded),
+                        title: const Text('First reminder time'),
+                        subtitle: Text(
+                          _formatTime(_habitNotificationStart),
+                        ),
+                        onTap: () async {
+                          final picked = await showTimePicker(
+                            context: context,
+                            initialTime: _habitNotificationStart,
+                          );
+                          if (picked == null) return;
+                          setState(() => _habitNotificationStart = picked);
+                        },
+                      ),
+                      DropdownButtonFormField<int>(
+                        value: _habitNotificationIntervalHours,
+                        decoration: const InputDecoration(
+                          labelText: 'Time between reminders',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: List.generate(24, (index) => index + 1)
+                            .map((hours) {
+                              return DropdownMenuItem(
+                                value: hours,
+                                child: Text(
+                                  '$hours hour${hours == 1 ? '' : 's'}',
+                                ),
+                              );
+                            })
+                            .toList(),
+                        onChanged: (value) {
+                          if (value == null) return;
+                          setState(() => _habitNotificationIntervalHours = value);
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: _notificationPreview().map((time) {
+                          return Chip(
+                            avatar: const Icon(Icons.alarm_rounded, size: 18),
+                            label: Text(time),
+                          );
+                        }).toList(),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Preview shows the next reminders based on your current settings.',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: _isDark
+                              ? const Color(0xFFB7C7E8)
+                              : const Color(0xFF47648E),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
 
                 const SizedBox(height: 24),

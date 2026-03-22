@@ -5,10 +5,20 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+configurations.all {
+    resolutionStrategy {
+        force("androidx.glance:glance:1.1.1")
+        force("androidx.glance:glance-appwidget:1.1.1")
+        force("androidx.glance:glance-appwidget-proto:1.1.1")
+        force("androidx.work:work-runtime:2.9.1")
+        force("androidx.work:work-runtime-ktx:2.9.1")
+    }
+}
+
 android {
     namespace = "com.example.task_management_app"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11

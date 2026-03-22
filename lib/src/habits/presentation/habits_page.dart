@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../data/habit_repository.dart';
 import '../models/habit.dart';
 import '../models/habit_entry.dart';
+import '../widget/habit_widget_service.dart';
 import 'widgets/habit_card.dart';
 
 class HabitsPage extends StatefulWidget {
@@ -45,6 +46,7 @@ class _HabitsPageState extends State<HabitsPage> {
           ..clear()
           ..addAll(entriesMap);
       });
+      await HabitWidgetService.sync(repository: _repo, habits: habits);
     } finally {
       setState(() => _loading = false);
     }
@@ -60,11 +62,13 @@ class _HabitsPageState extends State<HabitsPage> {
   Future<void> _increment(Habit habit) async {
     await _repo.incrementToday(habit: habit);
     await _refreshEntries(habit.id);
+    await HabitWidgetService.sync(repository: _repo);
   }
 
   Future<void> _decrement(Habit habit) async {
     await _repo.decrementToday(habit: habit);
     await _refreshEntries(habit.id);
+    await HabitWidgetService.sync(repository: _repo);
   }
 
   Future<void> _onExpand(Habit habit) async {
@@ -94,6 +98,7 @@ class _HabitsPageState extends State<HabitsPage> {
       _entries.remove(habit.id);
       _expandedHabits.remove(habit.id);
     });
+    await HabitWidgetService.sync(repository: _repo);
 
     if (!mounted) return;
     ScaffoldMessenger.of(
@@ -131,6 +136,7 @@ class _HabitsPageState extends State<HabitsPage> {
 
     // refresh entries because frequency change affects heatmap intensity + streak
     await _refreshEntries(habit.id);
+    await HabitWidgetService.sync(repository: _repo);
   }
 
   Future<void> _showAddHabitSheet() async {
@@ -152,6 +158,7 @@ class _HabitsPageState extends State<HabitsPage> {
         _habits.insert(0, newHabit);
         _entries[newHabit.id] = [];
       });
+      await HabitWidgetService.sync(repository: _repo);
     }
   }
 

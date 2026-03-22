@@ -1,31 +1,69 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'src/bootstrap/app_bootstrap.dart';
+import 'src/habits/widget/habit_widget_service.dart';
+import 'src/habits/presentation/habits_page.dart';
 import 'src/pages/home_page.dart';
 import 'src/pages/sign_in_page.dart';
 import 'src/pages/update_password_page.dart';
+import 'src/services/habit_notification_service.dart';
 import 'src/theme/app_theme.dart';
 import 'src/bootstrap/settings_bootstrap.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await dotenv.load(fileName: ".env");
-
-  await Supabase.initialize(
-    url: dotenv.env['SUPABASE_URL']!,
-    anonKey: dotenv.env['SUPABASE_ANON_KEY']!,
-    // You can include authOptions if you want, but it's optional
-    // authOptions: const FlutterAuthClientOptions(
-    //   autoRefreshToken: true, // this is true by default
-    // ),
-  );
+  await AppBootstrap.ensureInitialized();
+  await HabitWidgetService.initialize();
 
   runApp(const TaskApp());
 }
 
-class TaskApp extends StatelessWidget {
+class TaskApp extends StatefulWidget {
   const TaskApp({super.key});
+
+  @override
+  State<TaskApp> createState() => _TaskAppState();
+}
+
+class _TaskAppState extends State<TaskApp> with WidgetsBindingObserver {
+  final _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _handlePendingLaunch();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _handlePendingLaunch();
+    }
+  }
+
+  Future<void> _handlePendingLaunch() async {
+    final destination =
+        await HabitNotificationService.consumeLaunchDestination();
+    if (!mounted || destination != 'habits') return;
+    if (Supabase.instance.client.auth.currentSession == null) return;
+
+    final navigator = _navigatorKey.currentState;
+    final context = _navigatorKey.currentContext;
+    if (navigator == null || context == null) return;
+
+    navigator.push(
+      MaterialPageRoute(builder: (_) => const HabitsPage()),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,6 +74,7 @@ class TaskApp extends StatelessWidget {
           valueListenable: AppTheme.fontFamily,
           builder: (context, font, _) {
             return MaterialApp(
+              navigatorKey: _navigatorKey,
               builder: (context, child) {
                 final mediaQuery = MediaQuery.of(context);
 

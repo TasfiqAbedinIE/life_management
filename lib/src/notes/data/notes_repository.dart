@@ -70,4 +70,41 @@ class NotesRepository {
       whereArgs: [id],
     );
   }
+
+  Future<List<Note>> searchNotes({
+    String query = '',
+    NoteType? type,
+    bool pinnedOnly = false,
+  }) async {
+    final db = await NotesDB.instance.database;
+    final trimmedQuery = query.trim().toLowerCase();
+    final where = <String>[];
+    final whereArgs = <Object?>[];
+
+    if (trimmedQuery.isNotEmpty) {
+      where.add(
+        '(LOWER(title) LIKE ? OR LOWER(content) LIKE ? OR LOWER(tags_csv) LIKE ?)',
+      );
+      final matcher = '%$trimmedQuery%';
+      whereArgs.addAll([matcher, matcher, matcher]);
+    }
+
+    if (type != null) {
+      where.add('note_type = ?');
+      whereArgs.add(type.storageValue);
+    }
+
+    if (pinnedOnly) {
+      where.add('is_pinned = 1');
+    }
+
+    final rows = await db.query(
+      'notes',
+      where: where.isEmpty ? null : where.join(' AND '),
+      whereArgs: where.isEmpty ? null : whereArgs,
+      orderBy: 'is_pinned DESC, updated_at DESC',
+    );
+
+    return rows.map(Note.fromMap).toList();
+  }
 }

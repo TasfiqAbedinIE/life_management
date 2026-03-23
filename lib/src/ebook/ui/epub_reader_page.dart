@@ -36,15 +36,16 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
   double _currentProgress = 0.0;
   bool _showHud = true;
   double _fontSize = 18;
-  String _hudFontFamily = 'Outfit';
   EpubThemeType _theme = EpubThemeType.custom;
   _SelectionState? _selection;
 
   bool _resumeReady = false;
   String? _resumeCfi;
   Timer? _resumeSaveTimer;
+  Offset? _touchDownPoint;
 
-  String get _resumeCfiKey => 'epub_resume_cfi_${widget.resumeKey ?? widget.title}';
+  String get _resumeCfiKey =>
+      'epub_resume_cfi_${widget.resumeKey ?? widget.title}';
   String get _resumeProgressKey =>
       'epub_resume_progress_${widget.resumeKey ?? widget.title}';
 
@@ -53,16 +54,6 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
     super.initState();
     _currentProgress = widget.initialProgress.clamp(0.0, 1.0).toDouble();
     _restoreResumeState();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (Theme.of(context).brightness == Brightness.dark &&
-        _theme == EpubThemeType.custom) {
-      _theme = EpubThemeType.dark;
-      _controller.updateTheme(theme: EpubTheme.dark());
-    }
   }
 
   @override
@@ -108,9 +99,20 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
     setState(() => _showHud = !_showHud);
   }
 
-  void _handleViewerTap(double x, double y) {
-    final inMiddleBand = x >= 0.30 && x <= 0.70 && y >= 0.18 && y <= 0.82;
-    if (inMiddleBand) {
+  void _handleViewerTouchDown(double x, double y) {
+    _touchDownPoint = Offset(x, y);
+  }
+
+  void _handleViewerTouchUp(double x, double y) {
+    final start = _touchDownPoint;
+    _touchDownPoint = null;
+    if (_selection != null || start == null) return;
+
+    final delta = (start - Offset(x, y)).distance;
+    final inBottomTapZone = start.dy >= 0.70 && y >= 0.70;
+    final looksLikeTap = delta <= 0.035;
+
+    if (looksLikeTap && inBottomTapZone) {
       _toggleHud();
     }
   }
@@ -119,32 +121,97 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
     switch (_theme) {
       case EpubThemeType.custom:
         _theme = EpubThemeType.light;
-        _controller.updateTheme(theme: EpubTheme.light());
       case EpubThemeType.light:
         _theme = EpubThemeType.dark;
-        _controller.updateTheme(theme: EpubTheme.dark());
       case EpubThemeType.dark:
         _theme = EpubThemeType.custom;
-        _controller.updateTheme(theme: _auroraTheme());
     }
+
+    _controller.updateTheme(theme: _readerThemeFor(_theme));
     setState(() {});
   }
 
-  EpubTheme _auroraTheme() {
-    return EpubTheme.custom(
-      backgroundDecoration: const BoxDecoration(color: Color(0xFFF1FAF7)),
-      foregroundColor: const Color(0xFF17332B),
-      customCss: {
-        'body': {
-          'font-family': 'Georgia, serif',
-          'line-height': '1.65',
-          'padding': '8px 10px',
-        },
-        'p': {
-          'font-size': '${_fontSize}px',
-        },
+  EpubTheme _readerThemeFor(EpubThemeType theme) {
+    switch (theme) {
+      case EpubThemeType.light:
+        return EpubTheme.custom(
+          backgroundDecoration: const BoxDecoration(color: Color(0xFFFFFFFF)),
+          foregroundColor: const Color(0xFF111827),
+          customCss: _readerCss(
+            textColor: '#111827',
+            backgroundColor: '#FFFFFF',
+            linkColor: '#1D4ED8',
+          ),
+        );
+      case EpubThemeType.dark:
+        return EpubTheme.custom(
+          backgroundDecoration: const BoxDecoration(color: Color(0xFF0F172A)),
+          foregroundColor: const Color(0xFFF8FAFC),
+          customCss: _readerCss(
+            textColor: '#F8FAFC',
+            backgroundColor: '#0F172A',
+            linkColor: '#93C5FD',
+          ),
+        );
+      case EpubThemeType.custom:
+        return EpubTheme.custom(
+          backgroundDecoration: const BoxDecoration(color: Color(0xFFF6E8C3)),
+          foregroundColor: const Color(0xFF4B3520),
+          customCss: _readerCss(
+            textColor: '#4B3520',
+            backgroundColor: '#F6E8C3',
+            linkColor: '#7C4A03',
+          ),
+        );
+    }
+  }
+
+  Map<String, Map<String, String>> _readerCss({
+    required String textColor,
+    required String backgroundColor,
+    required String linkColor,
+  }) {
+    final baseText = {
+      'color': '$textColor !important',
+      'font-size': '${_fontSize}px',
+      'line-height': '1.7',
+    };
+
+    return {
+      'html': {
+        'background-color': '$backgroundColor !important',
       },
-    );
+      'body': {
+        'font-family': 'Georgia, serif',
+        'padding': '8px 10px',
+        'background-color': '$backgroundColor !important',
+        'color': '$textColor !important',
+        'line-height': '1.7',
+      },
+      'p': baseText,
+      'div': {'color': '$textColor !important'},
+      'span': {'color': '$textColor !important'},
+      'li': baseText,
+      'blockquote': {'color': '$textColor !important'},
+      'h1': {'color': '$textColor !important'},
+      'h2': {'color': '$textColor !important'},
+      'h3': {'color': '$textColor !important'},
+      'h4': {'color': '$textColor !important'},
+      'h5': {'color': '$textColor !important'},
+      'h6': {'color': '$textColor !important'},
+      'a': {
+        'color': '$linkColor !important',
+        '-webkit-text-fill-color': '$linkColor !important',
+      },
+      'a:link': {
+        'color': '$linkColor !important',
+        '-webkit-text-fill-color': '$linkColor !important',
+      },
+      'a:visited': {
+        'color': '$linkColor !important',
+        '-webkit-text-fill-color': '$linkColor !important',
+      },
+    };
   }
 
   Future<void> _applyMark(Color color) async {
@@ -177,6 +244,7 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
     final next = (_fontSize + delta).clamp(14.0, 30.0).toDouble();
     setState(() => _fontSize = next);
     await _controller.setFontSize(fontSize: _fontSize);
+    _controller.updateTheme(theme: _readerThemeFor(_theme));
   }
 
   @override
@@ -202,9 +270,9 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
         : EpubSource.fromUrl(widget.sourceUrl!);
 
     final accent = switch (_theme) {
-      EpubThemeType.dark => const Color(0xFF94A3B8),
+      EpubThemeType.dark => const Color(0xFF93C5FD),
       EpubThemeType.light => const Color(0xFF2563EB),
-      EpubThemeType.custom => const Color(0xFF34D399),
+      EpubThemeType.custom => const Color(0xFFD97706),
     };
 
     return Scaffold(
@@ -226,13 +294,10 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
             initialCfi: _resumeCfi,
             displaySettings: EpubDisplaySettings(
               fontSize: _fontSize.toInt(),
-              theme: switch (_theme) {
-                EpubThemeType.dark => EpubTheme.dark(),
-                EpubThemeType.light => EpubTheme.light(),
-                EpubThemeType.custom => _auroraTheme(),
-              },
+              theme: _readerThemeFor(_theme),
             ),
-            onTouchUp: _handleViewerTap,
+            onTouchDown: _handleViewerTouchDown,
+            onTouchUp: _handleViewerTouchUp,
             onRelocated: (location) {
               setState(() {
                 _currentProgress = location.progress.clamp(0.0, 1.0).toDouble();
@@ -258,14 +323,16 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
             curve: Curves.easeOut,
             left: 14,
             right: 14,
-            bottom: _showHud ? 16 : -320,
+            bottom: _showHud ? 16 : -280,
             child: IgnorePointer(
               ignoring: !_showHud,
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: Colors.black.withValues(alpha: 0.78),
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.14),
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.18),
@@ -282,7 +349,11 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.auto_stories_rounded, color: accent, size: 18),
+                          Icon(
+                            Icons.auto_stories_rounded,
+                            color: accent,
+                            size: 18,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: LinearProgressIndicator(
@@ -296,9 +367,8 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
                           const SizedBox(width: 10),
                           Text(
                             '${(_currentProgress * 100).toStringAsFixed(0)}%',
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.white,
-                              fontFamily: _hudFontFamily,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
@@ -327,39 +397,22 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
                         ),
                       ),
                       const SizedBox(height: 6),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          _miniChip(
-                            label: _hudFontFamily,
-                            selected: _hudFontFamily == 'Outfit',
-                            onTap: () => setState(() => _hudFontFamily = 'Outfit'),
-                          ),
-                          _miniChip(
-                            label: 'Georgia',
-                            selected: _hudFontFamily == 'Georgia',
-                            onTap: () => setState(() => _hudFontFamily = 'Georgia'),
-                          ),
-                          _miniChip(
-                            label: 'Delius',
-                            selected: _hudFontFamily == 'Delius',
-                            onTap: () => setState(() => _hudFontFamily = 'Delius'),
-                          ),
-                          const SizedBox(width: 4),
                           _miniIcon(
                             icon: Icons.text_decrease_rounded,
                             onTap: () => _changeFontSize(-1),
                           ),
+                          const SizedBox(width: 10),
                           Text(
                             _fontSize.toStringAsFixed(0),
-                            style: TextStyle(
+                            style: const TextStyle(
                               color: Colors.white70,
-                              fontFamily: _hudFontFamily,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
+                          const SizedBox(width: 10),
                           _miniIcon(
                             icon: Icons.text_increase_rounded,
                             onTap: () => _changeFontSize(1),
@@ -414,9 +467,8 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
               selection.selectedText.trim().replaceAll('\n', ' '),
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(
+              style: const TextStyle(
                 color: Colors.white,
-                fontFamily: _hudFontFamily,
                 fontWeight: FontWeight.w700,
               ),
             ),
@@ -474,40 +526,6 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
     );
   }
 
-  Widget _miniChip({
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-        decoration: BoxDecoration(
-          color: selected
-              ? Colors.white.withValues(alpha: 0.16)
-              : Colors.white.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: selected
-                ? Colors.white.withValues(alpha: 0.28)
-                : Colors.white.withValues(alpha: 0.10),
-          ),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: Colors.white,
-            fontFamily: _hudFontFamily,
-            fontSize: 12,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _markChip({
     required String label,
     required Color color,
@@ -525,9 +543,8 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
         ),
         child: Text(
           label,
-          style: TextStyle(
+          style: const TextStyle(
             color: Colors.white,
-            fontFamily: _hudFontFamily,
             fontSize: 12,
             fontWeight: FontWeight.w700,
           ),
@@ -546,3 +563,4 @@ class _SelectionState {
   final String selectedText;
   final String selectionCfi;
 }
+

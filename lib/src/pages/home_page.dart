@@ -122,6 +122,265 @@ class _HomePageState extends State<HomePage> {
     return names[d.weekday - 1];
   }
 
+  String _monthShortLabel(int month) {
+    const names = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
+    return names[month - 1];
+  }
+
+  String _formatCompactTime(DateTime value) {
+    final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
+    final minute = value.minute.toString().padLeft(2, '0');
+    final meridiem = value.hour >= 12 ? 'PM' : 'AM';
+    return '$hour:$minute $meridiem';
+  }
+
+  String _formatCompactDate(DateTime value) {
+    return '${_weekdayShortLabel(value)}, ${value.day} ${_monthShortLabel(value.month)}';
+  }
+
+  String _timeContextLabel(int hour) {
+    if (hour >= 6 && hour < 10) return 'Fresh start';
+    if (hour >= 10 && hour < 13) return 'In flow';
+    if (hour >= 13 && hour < 17) return 'Deep work';
+    if (hour >= 17 && hour < 21) return 'Wind down';
+    return 'Quiet hours';
+  }
+
+  String _headerSupportText(int hour) {
+    if (hour >= 6 && hour < 10) {
+      return 'Clear the small tasks early and keep space for the important ones.';
+    }
+    if (hour >= 10 && hour < 13) {
+      return 'Your day is in motion now. Protect a little room for focused work.';
+    }
+    if (hour >= 13 && hour < 17) {
+      return 'A steady afternoon rhythm beats rushing the rest of the list.';
+    }
+    if (hour >= 17 && hour < 21) {
+      return 'Wrap up the essentials and leave tomorrow a cleaner start.';
+    }
+    return 'Keep it light right now. A calm reset is productive too.';
+  }
+
+  Widget _headerPill({required IconData icon, required String label}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCompactHeader(
+    BuildContext context, {
+    required String greeting,
+    required String name,
+    required ThemeData theme,
+  }) {
+    final hour = _now.hour;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: AppPalette.heroGradient(context),
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.18),
+            blurRadius: 20,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: -30,
+            right: -18,
+            child: Container(
+              width: 110,
+              height: 110,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.08),
+              ),
+            ),
+          ),
+          Positioned(
+            bottom: -42,
+            left: -24,
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.05),
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            _timeContextLabel(hour),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          '$greeting, $name',
+                          style: theme.textTheme.headlineSmall?.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            height: 1.05,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _headerSupportText(hour),
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.86),
+                            fontSize: 12.5,
+                            height: 1.35,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                        color: Colors.white.withValues(alpha: 0.14),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.14),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Icon(
+                            _iconForTime(hour),
+                            color: const Color(0xFFFFD66B),
+                            size: 22,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          _formatCompactTime(_now),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          _formatCompactDate(_now),
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.78),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _headerPill(
+                    icon: Icons.calendar_today_rounded,
+                    label: '${_weekdayShortLabel(_now)} plan',
+                  ),
+                  _headerPill(
+                    icon: Icons.schedule_rounded,
+                    label: 'Updated live',
+                  ),
+                  _headerPill(
+                    icon: Icons.wb_twilight_rounded,
+                    label: _timeContextLabel(hour),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   bool _actionsExpanded = true;
 
   Widget _actionDivider() {
@@ -177,7 +436,6 @@ class _HomePageState extends State<HomePage> {
     final name = _firstNameFromUser();
     final theme = Theme.of(context);
     final surface = AppPalette.surface(context);
-    final isDark = AppPalette.isDark(context);
 
     return Scaffold(
       backgroundColor: AppPalette.background(context),
@@ -211,43 +469,23 @@ class _HomePageState extends State<HomePage> {
       ),
       // drawer: const _AppDrawer(),
       body: SafeArea(
-        child: Column(
-          children: [
-            // Greeting & hero section
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 18,
-                  vertical: 16,
+        child: RefreshIndicator(
+          onRefresh: _onRefreshDashboard,
+          child: ListView(
+            padding: EdgeInsets.zero,
+            physics: const AlwaysScrollableScrollPhysics(),
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                child: _buildCompactHeader(
+                  context,
+                  greeting: greeting,
+                  name: name,
+                  theme: theme,
                 ),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: AppPalette.heroGradient(context),
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  borderRadius: BorderRadius.circular(20),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.18),
-                      blurRadius: 18,
-                      offset: const Offset(0, 10),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      _iconForTime(DateTime.now().hour),
-                      color: Colors.amber,
-                      size: 42,
-                    ),
+              ),
 
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              /*
                         children: [
                           Text(
                             '$greeting, $name 👋',
@@ -295,113 +533,109 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-            const SizedBox(height: 12),
+            */
+              const SizedBox(height: 12),
 
-            // Main content – rounded white container
-            Expanded(
-              child: RefreshIndicator(
-                onRefresh: _onRefreshDashboard,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: surface,
-                    borderRadius: const BorderRadius.vertical(
-                      top: Radius.circular(24),
-                    ),
-                  ),
-                  child: ListView(
-                    padding: const EdgeInsets.all(20),
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    children: [
-                      _quotes.isEmpty
-                          ? _skeletonCard(height: 140)
-                          : GestureDetector(
-                              onTap: () {
-                                if (_quotes.isEmpty) return;
-                                setState(() {
-                                  _advanceQuote(); // 👆 tap = go to next
-                                });
-                              },
-                              child: _QuoteCard(
-                                quote: _quotes[_currentQuoteIndex],
-                              ),
-                            ),
-
-                      const SizedBox(height: 16),
-
-                      _actionDivider(),
-                      _actionsSection(),
-                      const SizedBox(height: 16),
-
-                      // LAST 7 DAYS EFFICIENCY CARD + WEEKLY GRAPH
-                      FutureBuilder<_EfficiencySummary>(
-                        future: _efficiencyFuture,
-                        builder: (context, snapshot) {
-                          if (snapshot.connectionState ==
-                              ConnectionState.waiting) {
-                            return _skeletonCard(height: 200);
-                          }
-
-                          if (snapshot.hasError) {
-                            return _errorCard(
-                              title: 'Could not load efficiency',
-                              message: snapshot.error.toString(),
-                              onRetry: () => setState(() {
-                                _efficiencyFuture = _fetchEfficiencySummary(
-                                  _selectedLabel,
-                                );
-                              }),
-                            );
-                          }
-
-                          final summary = snapshot.data!;
-                          if (!summary.hasActivityHours) {
-                            return _infoCard(
-                              title: 'Set your activity hours',
-                              message:
-                                  'Go to Settings → Focus Hours to set your daily activity hours. Once you save it, your efficiency for the last week will appear here.',
-                              onTap: () {
-                                Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => const SettingsPage(),
-                                  ),
-                                );
-                              },
-                            );
-                          }
-
-                          return Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              _labelFilterChips(),
-                              const SizedBox(height: 12),
-                              _EfficiencyCard(
-                                summary: summary,
-                                selectedLabel: _selectedLabel,
-                              ),
-                            ],
-                          );
-                        },
-                      ),
-
-                      const SizedBox(height: 16),
-
-                      _HabitsDashboardSection(
-                        onOpenHabits: () {
-                          Navigator.of(context).push(
-                            MaterialPageRoute(
-                              builder: (_) => const HabitsPage(),
-                            ),
-                          );
-                        },
-                      ),
-
-                      const SizedBox(height: 24),
-                    ],
+              // Main content – rounded white container
+              Container(
+                decoration: BoxDecoration(
+                  color: surface,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
                   ),
                 ),
+                child: ListView(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(20),
+                  children: [
+                    _quotes.isEmpty
+                        ? _skeletonCard(height: 140)
+                        : GestureDetector(
+                            onTap: () {
+                              if (_quotes.isEmpty) return;
+                              setState(() {
+                                _advanceQuote(); // 👆 tap = go to next
+                              });
+                            },
+                            child: _QuoteCard(
+                              quote: _quotes[_currentQuoteIndex],
+                            ),
+                          ),
+
+                    const SizedBox(height: 16),
+
+                    _actionDivider(),
+                    _actionsSection(),
+                    const SizedBox(height: 16),
+
+                    // LAST 7 DAYS EFFICIENCY CARD + WEEKLY GRAPH
+                    FutureBuilder<_EfficiencySummary>(
+                      future: _efficiencyFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState ==
+                            ConnectionState.waiting) {
+                          return _skeletonCard(height: 200);
+                        }
+
+                        if (snapshot.hasError) {
+                          return _errorCard(
+                            title: 'Could not load efficiency',
+                            message: snapshot.error.toString(),
+                            onRetry: () => setState(() {
+                              _efficiencyFuture = _fetchEfficiencySummary(
+                                _selectedLabel,
+                              );
+                            }),
+                          );
+                        }
+
+                        final summary = snapshot.data!;
+                        if (!summary.hasActivityHours) {
+                          return _infoCard(
+                            title: 'Set your activity hours',
+                            message:
+                                'Go to Settings → Focus Hours to set your daily activity hours. Once you save it, your efficiency for the last week will appear here.',
+                            onTap: () {
+                              Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => const SettingsPage(),
+                                ),
+                              );
+                            },
+                          );
+                        }
+
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            _labelFilterChips(),
+                            const SizedBox(height: 12),
+                            _EfficiencyCard(
+                              summary: summary,
+                              selectedLabel: _selectedLabel,
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    _HabitsDashboardSection(
+                      onOpenHabits: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const HabitsPage()),
+                        );
+                      },
+                    ),
+
+                    const SizedBox(height: 24),
+                  ],
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -425,10 +659,13 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _quickActionsRow() {
-    return Wrap(
-      alignment: WrapAlignment.start,
-      spacing: 28,
-      runSpacing: 8,
+    return GridView.count(
+      crossAxisCount: 4,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 12,
+      crossAxisSpacing: 12,
+      childAspectRatio: 1.0,
       children: [
         _MinimalActionButton(
           icon: Image.asset("assets/icon/tasks_icon.png", fit: BoxFit.contain),
@@ -1146,7 +1383,7 @@ class _HabitsDashboardData {
 }
 
 class _MinimalActionButton extends StatelessWidget {
-  final Widget icon; // ← any widget you want to pass
+  final Widget icon;
   final String label;
   final VoidCallback onTap;
 
@@ -1158,37 +1395,26 @@ class _MinimalActionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color bg = AppPalette.surfaceAlt(context);
-    final Color border = AppPalette.border(context);
+    final theme = Theme.of(context);
 
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(14),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
-        // decoration: BoxDecoration(
-        //   color: bg,
-        //   borderRadius: BorderRadius.circular(14),
-        //   border: Border.all(color: border),
-        //   boxShadow: [
-        //     BoxShadow(
-        //       color: AppPalette.softShadow(context),
-        //       blurRadius: 10,
-        //       offset: const Offset(0, 6),
-        //     ),
-        //   ],
-        // ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            SizedBox(height: 24, width: 24, child: icon), // ← uses your widget
+            SizedBox(height: 24, width: 24, child: icon),
             const SizedBox(height: 6),
             Text(
               label,
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: Theme.of(context).colorScheme.onSurface,
+                color: theme.colorScheme.onSurface,
               ),
             ),
           ],

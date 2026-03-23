@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -215,66 +216,32 @@ class _ActivityTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final stats = _BudgetStats.fromData(data);
     final groups = _groupedTransactions(data.transactions);
-    if (groups.isEmpty) {
-      return ListView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-        children: [
-          _MonthlySummaryStrip(data: data, stats: stats),
-          const SizedBox(height: 24),
-          const Center(child: Text('No transactions yet.')),
-        ],
-      );
-    }
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
       children: [
         _MonthlySummaryStrip(data: data, stats: stats),
         const SizedBox(height: 16),
-        ...groups.map((group) {
-          final subtotal = group.items.fold<double>(
-            0,
-            (sum, tx) => sum + (tx.type.isExpense ? tx.amount : -tx.amount),
-          );
-          return _Card(
-            margin: const EdgeInsets.only(bottom: 16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        DateFormat('dd.MM.yy').format(group.date),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w800,
-                          fontSize: 20,
-                        ),
-                      ),
-                    ),
-                    Text(
-                      _money(data.profile.currencyCode, subtotal.abs()),
-                      style: TextStyle(
-                        fontWeight: FontWeight.w800,
-                        color: subtotal > 0
-                            ? Theme.of(context).colorScheme.error
-                            : Colors.green,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                ...group.items.map(
-                  (tx) => _TransactionTile(
-                    tx: tx,
-                    currencyCode: data.profile.currencyCode,
-                    onTap: () => onEdit(tx),
-                    onDelete: () => onDelete(tx),
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
+        if (groups.isEmpty)
+          const Padding(
+            padding: EdgeInsets.only(top: 24),
+            child: Center(child: Text('No transactions yet.')),
+          )
+        else
+          ...groups.map((group) {
+            final subtotal = group.items.fold<double>(
+              0,
+              (sum, tx) => sum + (tx.type.isExpense ? tx.amount : -tx.amount),
+            );
+            return _ActivityLedgerSection(
+              date: group.date,
+              subtotal: subtotal,
+              currencyCode: data.profile.currencyCode,
+              transactions: group.items,
+              onEdit: onEdit,
+              onDelete: onDelete,
+            );
+          }),
       ],
     );
   }
@@ -406,7 +373,6 @@ class _InsightsTab extends StatefulWidget {
 
 class _InsightsTabState extends State<_InsightsTab> {
   int? _selectedDay;
-  String? _selectedCategory;
   late DateTime _selectedMonth;
 
   @override
@@ -422,15 +388,14 @@ class _InsightsTabState extends State<_InsightsTab> {
       widget.data.plans,
       _selectedMonth,
     );
-    final days = _sevenDaySpendForMonth(
-      widget.data.transactions,
-      _selectedMonth,
-    );
+    final days = _dailySpendForMonth(widget.data.transactions, _selectedMonth);
     final maxSpend = days.fold<double>(
       0,
       (max, item) => math.max(max, item.amount),
     );
     final pie = _pieEntries(stats.expenseByCategory);
+    final scheme = Theme.of(context).colorScheme;
+    final net = stats.monthIncome - stats.monthExpense;
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
@@ -448,7 +413,6 @@ class _InsightsTabState extends State<_InsightsTab> {
                       _selectedMonth.month - 1,
                     );
                     _selectedDay = null;
-                    _selectedCategory = null;
                   });
                 },
                 onNext: () {
@@ -458,74 +422,78 @@ class _InsightsTabState extends State<_InsightsTab> {
                       _selectedMonth.month + 1,
                     );
                     _selectedDay = null;
-                    _selectedCategory = null;
                   });
                 },
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
-                    child: _MiniStat(
+                    child: _InsightMetricChip(
                       label: 'Income',
                       value: _money(
                         widget.data.profile.currencyCode,
                         stats.monthIncome,
                       ),
+                      color: Colors.green,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: _MiniStat(
+                    child: _InsightMetricChip(
                       label: 'Expense',
                       value: _money(
                         widget.data.profile.currencyCode,
                         stats.monthExpense,
                       ),
+                      color: scheme.error,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 8),
                   Expanded(
-                    child: _MiniStat(
+                    child: _InsightMetricChip(
                       label: 'Net',
-                      value: _money(
-                        widget.data.profile.currencyCode,
-                        stats.monthIncome - stats.monthExpense,
-                      ),
+                      value: _money(widget.data.profile.currencyCode, net),
+                      color: net < 0 ? scheme.error : scheme.primary,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
               const Text(
-                '7 day spend pulse',
+                'Monthly spend pulse',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
               ),
               const SizedBox(height: 6),
-              const Text('Tap a bar to inspect a day.'),
-              const SizedBox(height: 16),
+              Text(
+                'Scroll horizontally to review daily spending in this month.',
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+              const SizedBox(height: 14),
               SizedBox(
-                height: 210,
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: List.generate(days.length, (index) {
-                    final item = days[index];
-                    final selected = _selectedDay == index;
-                    final height = maxSpend == 0
-                        ? 12.0
-                        : 28 + (item.amount / maxSpend) * 110;
-                    return Expanded(
-                      child: GestureDetector(
+                height: 230,
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: List.generate(days.length, (index) {
+                      final item = days[index];
+                      final selected = _selectedDay == index;
+                      final height = maxSpend == 0
+                          ? 12.0
+                          : 24 + (item.amount / maxSpend) * 118;
+                      return GestureDetector(
                         onTap: () => setState(
                           () => _selectedDay = selected ? null : index,
                         ),
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: Container(
+                          width: 28,
+                          margin: const EdgeInsets.only(right: 8),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.end,
                             children: [
                               SizedBox(
-                                height: 34,
+                                height: 30,
                                 child: FittedBox(
                                   fit: BoxFit.scaleDown,
                                   child: Text(
@@ -535,39 +503,41 @@ class _InsightsTabState extends State<_InsightsTab> {
                                             item.amount,
                                           )
                                         : '',
-                                  ),
-                                ),
-                              ),
-                              AnimatedContainer(
-                                duration: const Duration(milliseconds: 180),
-                                height: height,
-                                decoration: BoxDecoration(
-                                  color: selected
-                                      ? Theme.of(context).colorScheme.primary
-                                      : Theme.of(context).colorScheme.primary
-                                            .withValues(alpha: 0.35),
-                                  borderRadius: BorderRadius.circular(16),
-                                ),
-                              ),
-                              const SizedBox(height: 10),
-                              SizedBox(
-                                height: 18,
-                                child: FittedBox(
-                                  fit: BoxFit.scaleDown,
-                                  child: Text(
-                                    DateFormat('dd').format(item.day),
-                                    style: const TextStyle(
+                                    style: TextStyle(
+                                      color: scheme.primary,
                                       fontWeight: FontWeight.w700,
                                     ),
                                   ),
                                 ),
                               ),
+                              AnimatedContainer(
+                                duration: const Duration(milliseconds: 180),
+                                width: 20,
+                                height: height,
+                                decoration: BoxDecoration(
+                                  color: selected
+                                      ? scheme.primary
+                                      : scheme.primary.withValues(alpha: 0.32),
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                DateFormat('d').format(item.day),
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w700,
+                                  color: selected
+                                      ? scheme.primary
+                                      : scheme.onSurfaceVariant,
+                                ),
+                              ),
                             ],
                           ),
                         ),
-                      ),
-                    );
-                  }),
+                      );
+                    }),
+                  ),
                 ),
               ),
             ],
@@ -591,88 +561,30 @@ class _InsightsTabState extends State<_InsightsTab> {
                   'Add expense transactions in this month to see the chart.',
                 )
               else
-                SizedBox(
-                  height: 240,
-                  child: Row(
-                    children: [
-                      Expanded(
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final chartSize = math.min(
+                      constraints.maxWidth,
+                      MediaQuery.of(context).size.height * 0.34,
+                    );
+                    return Center(
+                      child: SizedBox(
+                        width: chartSize,
+                        height: chartSize,
                         child: CustomPaint(
                           painter: _PieChartPainter(
                             entries: pie,
-                            selectedCategory: _selectedCategory,
+                            totalAmount: stats.monthExpense,
+                            surfaceColor:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? const Color(0xFF171F35)
+                                : Colors.white,
+                            textColor: Theme.of(context).colorScheme.onSurface,
                           ),
-                          child: const SizedBox.expand(),
                         ),
                       ),
-                      const SizedBox(width: 18),
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: pie.map((entry) {
-                            final percent = stats.monthExpense == 0
-                                ? 0
-                                : (entry.amount / stats.monthExpense) * 100;
-                            final selected =
-                                _selectedCategory == entry.category;
-                            return Padding(
-                              padding: const EdgeInsets.only(bottom: 10),
-                              child: InkWell(
-                                onTap: () => setState(
-                                  () => _selectedCategory = selected
-                                      ? null
-                                      : entry.category,
-                                ),
-                                borderRadius: BorderRadius.circular(18),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 180),
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: selected
-                                        ? entry.color.withValues(alpha: 0.18)
-                                        : entry.color.withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(18),
-                                    border: Border.all(
-                                      color: entry.color.withValues(
-                                        alpha: 0.35,
-                                      ),
-                                    ),
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      Container(
-                                        width: 12,
-                                        height: 12,
-                                        decoration: BoxDecoration(
-                                          color: entry.color,
-                                          shape: BoxShape.circle,
-                                        ),
-                                      ),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          entry.category,
-                                          style: const TextStyle(
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                      Text(
-                                        '${percent.toStringAsFixed(0)}%',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ],
-                  ),
+                    );
+                  },
                 ),
             ],
           ),
@@ -683,16 +595,14 @@ class _InsightsTabState extends State<_InsightsTab> {
 }
 
 class _Card extends StatelessWidget {
-  const _Card({required this.child, this.margin});
+  const _Card({required this.child});
 
   final Widget child;
-  final EdgeInsetsGeometry? margin;
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      margin: margin,
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: isDark ? const Color(0xFF171F35) : Colors.white,
@@ -700,6 +610,53 @@ class _Card extends StatelessWidget {
         border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
       ),
       child: child,
+    );
+  }
+}
+
+class _InsightMetricChip extends StatelessWidget {
+  const _InsightMetricChip({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -731,8 +688,109 @@ class _MiniStat extends StatelessWidget {
   }
 }
 
-class _TransactionTile extends StatelessWidget {
-  const _TransactionTile({
+class _ActivityLedgerSection extends StatelessWidget {
+  const _ActivityLedgerSection({
+    required this.date,
+    required this.subtotal,
+    required this.currencyCode,
+    required this.transactions,
+    required this.onEdit,
+    required this.onDelete,
+  });
+
+  final DateTime date;
+  final double subtotal;
+  final String currencyCode;
+  final List<BudgetTransaction> transactions;
+  final ValueChanged<BudgetTransaction> onEdit;
+  final ValueChanged<BudgetTransaction> onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final subtotalColor = subtotal > 0 ? scheme.error : Colors.green;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF171F35)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  DateFormat('dd.MM.yy').format(date),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+              ),
+              Text(
+                _money(currencyCode, subtotal.abs()),
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                  color: subtotalColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Divider(height: 1),
+          const SizedBox(height: 8),
+          const Row(
+            children: [
+              Expanded(
+                flex: 4,
+                child: Text(
+                  'Category',
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+                ),
+              ),
+              Expanded(
+                flex: 2,
+                child: Text(
+                  'Source',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+                ),
+              ),
+              Expanded(
+                flex: 3,
+                child: Text(
+                  'Amount',
+                  textAlign: TextAlign.end,
+                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700),
+                ),
+              ),
+              SizedBox(width: 28),
+            ],
+          ),
+          const SizedBox(height: 4),
+          ...transactions.map(
+            (tx) => _ActivityTableRow(
+              tx: tx,
+              currencyCode: currencyCode,
+              onTap: () => onEdit(tx),
+              onDelete: () => onDelete(tx),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivityTableRow extends StatelessWidget {
+  const _ActivityTableRow({
     required this.tx,
     required this.currencyCode,
     required this.onTap,
@@ -746,55 +804,75 @@ class _TransactionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final amountColor = tx.type.isIncome
-        ? Colors.green
-        : Theme.of(context).colorScheme.error;
+    final scheme = Theme.of(context).colorScheme;
+    final amountColor = tx.type.isIncome ? Colors.green : scheme.error;
+
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
+      borderRadius: BorderRadius.circular(12),
       child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 4),
         child: Row(
           children: [
             Expanded(
-              flex: 3,
+              flex: 4,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    tx.description.isEmpty ? tx.category : tx.description,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
+                    tx.category,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  const SizedBox(height: 4),
-                  Text(tx.category),
+                  if (tx.description.isNotEmpty)
+                    Text(
+                      tx.description,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 10,
+                        color: scheme.onSurfaceVariant,
+                      ),
+                    ),
                 ],
-              ),
-            ),
-            Expanded(
-              child: Text(
-                tx.source,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w700),
               ),
             ),
             Expanded(
               flex: 2,
               child: Text(
+                tx.source,
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 11, color: scheme.onSurfaceVariant),
+              ),
+            ),
+            Expanded(
+              flex: 3,
+              child: Text(
                 '${tx.type.isIncome ? '+' : '-'}${_money(currencyCode, tx.amount)}',
                 textAlign: TextAlign.end,
                 style: TextStyle(
-                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
                   color: amountColor,
                 ),
               ),
             ),
-            PopupMenuButton<String>(
-              onSelected: (value) {
-                if (value == 'delete') onDelete();
-              },
-              itemBuilder: (context) => const [
-                PopupMenuItem(value: 'delete', child: Text('Delete')),
-              ],
+            SizedBox(
+              width: 28,
+              child: PopupMenuButton<String>(
+                padding: EdgeInsets.zero,
+                iconSize: 18,
+                onSelected: (value) {
+                  if (value == 'delete') onDelete();
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(value: 'delete', child: Text('Delete')),
+                ],
+              ),
             ),
           ],
         ),
@@ -1092,21 +1170,13 @@ class _SpendDay {
   final double amount;
 }
 
-List<_SpendDay> _sevenDaySpendForMonth(
+List<_SpendDay> _dailySpendForMonth(
   List<BudgetTransaction> transactions,
   DateTime month,
 ) {
-  final now = DateTime.now();
-  final isCurrentMonth = now.year == month.year && now.month == month.month;
-  final anchor = isCurrentMonth
-      ? DateTime(now.year, now.month, now.day)
-      : DateTime(month.year, month.month + 1, 0);
-  return List.generate(7, (index) {
-    final day = DateTime(
-      anchor.year,
-      anchor.month,
-      anchor.day,
-    ).subtract(Duration(days: 6 - index));
+  final daysInMonth = DateTime(month.year, month.month + 1, 0).day;
+  return List.generate(daysInMonth, (index) {
+    final day = DateTime(month.year, month.month, index + 1);
     final amount = transactions.fold<double>(0, (sum, tx) {
       final occurred = DateTime(
         tx.occurredAt.year,
@@ -1161,41 +1231,100 @@ class _MonthlySummaryStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return _Card(
+    final scheme = Theme.of(context).colorScheme;
+    final balance = stats.monthIncome - stats.monthExpense;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? const Color(0xFF171F35)
+            : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: scheme.outlineVariant),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
             DateFormat('MMMM yyyy').format(data.month),
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+              color: scheme.onSurfaceVariant,
+            ),
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 10),
           Row(
             children: [
               Expanded(
-                child: _MiniStat(
+                child: _ActivityMetric(
                   label: 'Expense',
                   value: _money(data.profile.currencyCode, stats.monthExpense),
+                  color: scheme.error,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
-                child: _MiniStat(
+                child: _ActivityMetric(
                   label: 'Income',
                   value: _money(data.profile.currencyCode, stats.monthIncome),
+                  color: Colors.green,
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
-                child: _MiniStat(
+                child: _ActivityMetric(
                   label: 'Balance',
-                  value: _money(
-                    data.profile.currencyCode,
-                    stats.monthIncome - stats.monthExpense,
-                  ),
+                  value: _money(data.profile.currencyCode, balance),
+                  color: balance < 0 ? scheme.error : scheme.primary,
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivityMetric extends StatelessWidget {
+  const _ActivityMetric({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+              color: color,
+            ),
           ),
         ],
       ),
@@ -1465,11 +1594,15 @@ class _InsightMonthHeader extends StatelessWidget {
 class _PieChartPainter extends CustomPainter {
   const _PieChartPainter({
     required this.entries,
-    required this.selectedCategory,
+    required this.totalAmount,
+    required this.surfaceColor,
+    required this.textColor,
   });
 
   final List<_PieEntry> entries;
-  final String? selectedCategory;
+  final double totalAmount;
+  final Color surfaceColor;
+  final Color textColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -1477,32 +1610,126 @@ class _PieChartPainter extends CustomPainter {
     final total = entries.fold<double>(0, (sum, entry) => sum + entry.amount);
     if (total <= 0) return;
 
+    final shortest = math.min(size.width, size.height);
     final center = Offset(size.width / 2, size.height / 2);
-    final radius = math.min(size.width, size.height) / 2 - 18;
-    var startAngle = -math.pi / 2;
+    final outerRadius = shortest * 0.34;
+    final stroke = (shortest * 0.13).clamp(18.0, 30.0);
+    final labelSize = (shortest * 0.035).clamp(8.0, 11.0);
+    final labelRadius = outerRadius + stroke * 0.95;
+    final labelMaxWidth = shortest * 0.3;
 
+    var startAngle = -math.pi / 2;
     for (final entry in entries) {
       final sweep = (entry.amount / total) * math.pi * 2;
-      final selected = entry.category == selectedCategory;
       final paint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = selected ? 34 : 28
-        ..strokeCap = StrokeCap.round
+        ..strokeWidth = stroke
+        ..strokeCap = StrokeCap.butt
         ..color = entry.color;
-      final rect = Rect.fromCircle(
-        center: center,
-        radius: selected ? radius + 4 : radius,
-      );
+      final rect = Rect.fromCircle(center: center, radius: outerRadius);
       canvas.drawArc(rect, startAngle, sweep, false, paint);
+
+      if (sweep > 0.22) {
+        final labelAngle = startAngle + (sweep / 2);
+        final labelCenter = Offset(
+          center.dx + math.cos(labelAngle) * labelRadius,
+          center.dy + math.sin(labelAngle) * labelRadius,
+        );
+        final percent = totalAmount == 0
+            ? 0
+            : (entry.amount / totalAmount) * 100;
+        final labelPainter = TextPainter(
+          text: TextSpan(
+            text:
+                '${_shortCategoryLabel(entry.category)} ${percent.toStringAsFixed(0)}%',
+            style: TextStyle(
+              color: textColor,
+              fontSize: labelSize,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          maxLines: 1,
+          ellipsis: '...',
+          textAlign: TextAlign.center,
+          textDirection: ui.TextDirection.ltr,
+        )..layout(maxWidth: labelMaxWidth);
+
+        final paddingX = 8.0;
+        final paddingY = 5.0;
+        var left = labelCenter.dx - (labelPainter.width / 2) - paddingX;
+        var top = labelCenter.dy - (labelPainter.height / 2) - paddingY;
+        final maxLeft = size.width - labelPainter.width - (paddingX * 2);
+        final maxTop = size.height - labelPainter.height - (paddingY * 2);
+        left = left.clamp(0.0, maxLeft);
+        top = top.clamp(0.0, maxTop);
+
+        final bubbleRect = RRect.fromRectAndRadius(
+          Rect.fromLTWH(
+            left,
+            top,
+            labelPainter.width + (paddingX * 2),
+            labelPainter.height + (paddingY * 2),
+          ),
+          const Radius.circular(999),
+        );
+
+        final bubblePaint = Paint()
+          ..style = PaintingStyle.fill
+          ..color = surfaceColor.withValues(alpha: 0.94);
+        final borderPaint = Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.2
+          ..color = entry.color.withValues(alpha: 0.9);
+        canvas.drawRRect(bubbleRect, bubblePaint);
+        canvas.drawRRect(bubbleRect, borderPaint);
+        labelPainter.paint(canvas, Offset(left + paddingX, top + paddingY));
+      }
+
       startAngle += sweep;
     }
+
+    final holePaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = surfaceColor;
+    canvas.drawCircle(center, outerRadius - stroke, holePaint);
+
+    final totalPainter = TextPainter(
+      text: TextSpan(
+        text: _money('', totalAmount).trim(),
+        style: TextStyle(
+          color: textColor.withValues(alpha: 0.78),
+          fontSize: (shortest * 0.048).clamp(9.0, 14.0),
+          fontWeight: FontWeight.w700,
+        ),
+      ),
+      textAlign: TextAlign.center,
+      textDirection: ui.TextDirection.ltr,
+    )..layout(maxWidth: shortest * 0.24);
+    totalPainter.paint(
+      canvas,
+      Offset(
+        center.dx - (totalPainter.width / 2),
+        center.dy - (totalPainter.height / 2),
+      ),
+    );
   }
 
   @override
   bool shouldRepaint(covariant _PieChartPainter oldDelegate) {
     return oldDelegate.entries != entries ||
-        oldDelegate.selectedCategory != selectedCategory;
+        oldDelegate.totalAmount != totalAmount ||
+        oldDelegate.surfaceColor != surfaceColor ||
+        oldDelegate.textColor != textColor;
   }
+}
+
+String _shortCategoryLabel(String category) {
+  final words = category.split(' ');
+  if (category.length <= 12) return category;
+  if (words.length >= 2) {
+    return '${words.first} ${words[1]}';
+  }
+  return category.substring(0, 12);
 }
 
 String _topExpenseCategory(Map<String, double> expenseByCategory) {

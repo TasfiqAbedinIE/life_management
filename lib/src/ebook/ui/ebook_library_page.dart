@@ -6,12 +6,13 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../../theme/app_theme.dart';
+import '../data/ebook_reading_repository.dart';
 import '../data/ebook_repo_supabase.dart';
 import '../data/models/ebook.dart';
 import '../data/models/ebook_user_state.dart';
 import 'epub_reader_page.dart';
 import 'pdf_reader_page.dart';
-import '../../theme/app_theme.dart';
 
 class EbookLibraryPage extends StatefulWidget {
   const EbookLibraryPage({super.key});
@@ -22,6 +23,7 @@ class EbookLibraryPage extends StatefulWidget {
 
 class _EbookLibraryPageState extends State<EbookLibraryPage> {
   final _repo = EbookRepoSupabase();
+  final _readingRepo = EbookReadingRepository();
   final _dio = Dio();
   final _searchCtrl = TextEditingController();
 
@@ -45,7 +47,32 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
   Future<_EbookLibraryData> _loadData() async {
     final ebooks = await _repo.fetchEbooks();
     final userStates = await _repo.fetchUserStates();
-    return _EbookLibraryData(ebooks: ebooks, userStates: userStates);
+    final readingStats = await _readingRepo.fetchStats();
+    final coverUrls = <String, String>{};
+
+    final booksWithCover = ebooks
+        .where((e) => (e.coverPath ?? '').trim().isNotEmpty)
+        .toList();
+
+    await Future.wait(
+      booksWithCover.map((ebook) async {
+        try {
+          final signedUrl = await _repo.getSignedCoverUrl(ebook.coverPath);
+          if (signedUrl != null && signedUrl.isNotEmpty) {
+            coverUrls[ebook.id] = signedUrl;
+          }
+        } catch (_) {
+          // Ignore broken/missing cover paths and fall back to icon.
+        }
+      }),
+    );
+
+    return _EbookLibraryData(
+      ebooks: ebooks,
+      userStates: userStates,
+      readingStats: readingStats,
+      coverUrls: coverUrls,
+    );
   }
 
   Future<void> _refresh() async {
@@ -89,6 +116,20 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(ebook.author),
+                if ((ebook.description ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    ebook.description!.trim(),
+                    maxLines: 4,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppPalette.isDark(context)
+                          ? const Color(0xFFB9C6DD)
+                          : const Color(0xFF374151),
+                      height: 1.35,
+                    ),
+                  ),
+                ],
                 if (ebook.tags.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   Wrap(
@@ -278,9 +319,31 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
       _future = _future.then((data) {
         final updated = Map<String, EbookUserState>.from(data.userStates);
         updated[ebookId] = newState;
-        return _EbookLibraryData(ebooks: data.ebooks, userStates: updated);
+        return _EbookLibraryData(
+          ebooks: data.ebooks,
+          userStates: updated,
+          readingStats: data.readingStats,
+          coverUrls: data.coverUrls,
+        );
       });
     });
+  }
+
+  Future<void> _recordReadingSession({
+    required String ebookId,
+    required DateTime startAt,
+  }) async {
+    final elapsed = DateTime.now().difference(startAt);
+    if (elapsed.inSeconds <= 0) return;
+
+    await _readingRepo.addReadingDuration(
+      ebookId: ebookId,
+      duration: elapsed,
+      endedAt: DateTime.now(),
+    );
+
+    if (!mounted) return;
+    setState(() => _future = _loadData());
   }
 
   Future<void> _openReader({
@@ -288,6 +351,9 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
     required EbookUserState? state,
   }) async {
     setState(() => _openingBookId = ebook.id);
+
+    var pushedReader = false;
+    final readingStart = DateTime.now();
 
     try {
       String? localPath;
@@ -323,6 +389,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
       final initialProgress = (state?.progress ?? 0.0).clamp(0.0, 1.0);
       final isPdf = ebook.fileType.toLowerCase() == 'pdf';
 
+      pushedReader = true;
       if (isPdf) {
         await Navigator.of(context).push(
           MaterialPageRoute(
@@ -359,6 +426,10 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
         context,
       ).showSnackBar(SnackBar(content: Text('Failed to open ebook: $e')));
     } finally {
+      if (pushedReader) {
+        await _recordReadingSession(ebookId: ebook.id, startAt: readingStart);
+      }
+
       if (mounted) setState(() => _openingBookId = null);
     }
   }
@@ -397,7 +468,8 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
       tags.addAll(ebook.tags);
     }
 
-    final sorted = tags.toList()..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final sorted = tags.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
     return ['All', ...sorted];
   }
 
@@ -412,8 +484,146 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
 
       if (!matchesQuery) return false;
       if (_selectedTag == 'All') return true;
-      return ebook.tags.any((tag) => tag.toLowerCase() == _selectedTag.toLowerCase());
+      return ebook.tags.any(
+        (tag) => tag.toLowerCase() == _selectedTag.toLowerCase(),
+      );
     }).toList();
+  }
+
+  List<Ebook> _currentlyReading(_EbookLibraryData data) {
+    final books = data.ebooks.where((ebook) {
+      final progress = data.userStates[ebook.id]?.progress ?? 0.0;
+      return progress > 0 && progress < 1;
+    }).toList();
+
+    books.sort((a, b) {
+      final progressA = data.userStates[a.id]?.progress ?? 0.0;
+      final progressB = data.userStates[b.id]?.progress ?? 0.0;
+      if (progressA != progressB) return progressB.compareTo(progressA);
+      final timeA = data.readingStats.totalSecondsByBook[a.id] ?? 0;
+      final timeB = data.readingStats.totalSecondsByBook[b.id] ?? 0;
+      return timeB.compareTo(timeA);
+    });
+
+    return books;
+  }
+
+  _WeekComparison _comparison(int currentWeekSeconds, int previousWeekSeconds) {
+    if (previousWeekSeconds <= 0) {
+      if (currentWeekSeconds <= 0) {
+        return const _WeekComparison(
+          message: 'Start reading to build your weekly insight.',
+          isPositive: true,
+        );
+      }
+
+      return const _WeekComparison(
+        message: 'Great start this week. Keep your momentum going.',
+        isPositive: true,
+      );
+    }
+
+    final change =
+        ((currentWeekSeconds - previousWeekSeconds) / previousWeekSeconds) *
+        100;
+    final rounded = change.abs().round();
+
+    if (change >= 0) {
+      return _WeekComparison(
+        message: 'You read $rounded% more than previous week.',
+        isPositive: true,
+      );
+    }
+
+    return _WeekComparison(
+      message: 'You read $rounded% less than previous week.',
+      isPositive: false,
+    );
+  }
+
+  String _formatDuration(int totalSeconds) {
+    final hours = totalSeconds ~/ 3600;
+    final minutes = (totalSeconds % 3600) ~/ 60;
+
+    if (hours > 0 && minutes > 0) return '${hours}h ${minutes}m';
+    if (hours > 0) return '${hours}h';
+    if (minutes > 0) return '${minutes}m';
+    return '${totalSeconds}s';
+  }
+
+  Widget _analyticsCard(_EbookLibraryData data) {
+    final comparison = _comparison(
+      data.readingStats.currentWeekSeconds,
+      data.readingStats.previousWeekSeconds,
+    );
+    final totalTime = _formatDuration(data.readingStats.totalSecondsAllBooks);
+
+    final tone = comparison.isPositive
+        ? const Color(0xFF16A34A)
+        : const Color(0xFFDC2626);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF1D4ED8), Color(0xFF2563EB)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Reading Analysis',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: 17,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Total time spent: $totalTime',
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  comparison.isPositive
+                      ? Icons.trending_up_rounded
+                      : Icons.trending_down_rounded,
+                  color: tone,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    comparison.message,
+                    style: TextStyle(
+                      color: tone,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _tagChips(List<String> tags) {
@@ -436,11 +646,23 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
     );
   }
 
+  Widget _sectionTitle(String text) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+      ),
+    );
+  }
+
   Widget _bookCard({
     required Ebook ebook,
     required EbookUserState? state,
     required bool opening,
     required double? downloading,
+    required int totalSeconds,
+    required String? coverUrl,
   }) {
     final isDark = AppPalette.isDark(context);
     final isPdf = ebook.fileType.toLowerCase() == 'pdf';
@@ -467,22 +689,10 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
         ),
         child: Row(
           children: [
-            Container(
-              width: 56,
-              height: 72,
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [typeColor.withValues(alpha: 0.9), typeColor],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                isPdf ? Icons.picture_as_pdf_rounded : Icons.menu_book_rounded,
-                color: Colors.white,
-                size: 30,
-              ),
+            _bookThumbnail(
+              coverUrl: coverUrl,
+              typeColor: typeColor,
+              isPdf: isPdf,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -501,9 +711,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: isDark
-                          ? const Color(0xFF9FB0CC)
-                          : Colors.black54,
+                      color: isDark ? const Color(0xFF9FB0CC) : Colors.black54,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -519,6 +727,8 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                           '${progress.toStringAsFixed(0)}%',
                           const Color(0xFF2563EB),
                         ),
+                      if (totalSeconds > 0)
+                        _tinyBadge(_formatDuration(totalSeconds), const Color(0xFF7C3AED)),
                       ...ebook.tags.take(2).map(
                         (tag) => _tinyBadge(tag, const Color(0xFF64748B)),
                       ),
@@ -573,6 +783,52 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
     );
   }
 
+  Widget _bookThumbnail({
+    required String? coverUrl,
+    required Color typeColor,
+    required bool isPdf,
+  }) {
+    if (coverUrl == null || coverUrl.isEmpty) {
+      return _fallbackThumbnail(typeColor: typeColor, isPdf: isPdf);
+    }
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.network(
+        coverUrl,
+        width: 56,
+        height: 72,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) =>
+            _fallbackThumbnail(typeColor: typeColor, isPdf: isPdf),
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return _fallbackThumbnail(typeColor: typeColor, isPdf: isPdf);
+        },
+      ),
+    );
+  }
+
+  Widget _fallbackThumbnail({required Color typeColor, required bool isPdf}) {
+    return Container(
+      width: 56,
+      height: 72,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [typeColor.withValues(alpha: 0.9), typeColor],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Icon(
+        isPdf ? Icons.picture_as_pdf_rounded : Icons.menu_book_rounded,
+        color: Colors.white,
+        size: 30,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -596,10 +852,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                   children: [
                     Text(snapshot.error.toString()),
                     const SizedBox(height: 10),
-                    FilledButton(
-                      onPressed: _refresh,
-                      child: const Text('Retry'),
-                    ),
+                    FilledButton(onPressed: _refresh, child: const Text('Retry')),
                   ],
                 ),
               ),
@@ -611,6 +864,8 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
           if (!tags.contains(_selectedTag)) {
             _selectedTag = 'All';
           }
+
+          final currentlyReading = _currentlyReading(data);
           final visible = _visibleEbooks(data);
 
           return RefreshIndicator(
@@ -618,6 +873,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
             child: ListView(
               padding: const EdgeInsets.only(top: 16, bottom: 22),
               children: [
+                _analyticsCard(data),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: TextField(
@@ -637,7 +893,23 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                 ),
                 const SizedBox(height: 12),
                 _tagChips(tags),
+                if (currentlyReading.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  _sectionTitle('Currently Reading'),
+                  ...currentlyReading.map((ebook) {
+                    final state = data.userStates[ebook.id];
+                    return _bookCard(
+                      ebook: ebook,
+                      state: state,
+                      opening: _openingBookId == ebook.id,
+                      downloading: _downloadProgress[ebook.id],
+                      totalSeconds: data.readingStats.totalSecondsByBook[ebook.id] ?? 0,
+                      coverUrl: data.coverUrls[ebook.id],
+                    );
+                  }),
+                ],
                 const SizedBox(height: 8),
+                _sectionTitle('All Books'),
                 if (visible.isEmpty)
                   const Padding(
                     padding: EdgeInsets.only(top: 24),
@@ -651,6 +923,8 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                       state: state,
                       opening: _openingBookId == ebook.id,
                       downloading: _downloadProgress[ebook.id],
+                      totalSeconds: data.readingStats.totalSecondsByBook[ebook.id] ?? 0,
+                      coverUrl: data.coverUrls[ebook.id],
                     );
                   }),
               ],
@@ -665,6 +939,20 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
 class _EbookLibraryData {
   final List<Ebook> ebooks;
   final Map<String, EbookUserState> userStates;
+  final EbookReadingStats readingStats;
+  final Map<String, String> coverUrls;
 
-  const _EbookLibraryData({required this.ebooks, required this.userStates});
+  const _EbookLibraryData({
+    required this.ebooks,
+    required this.userStates,
+    required this.readingStats,
+    required this.coverUrls,
+  });
+}
+
+class _WeekComparison {
+  final String message;
+  final bool isPositive;
+
+  const _WeekComparison({required this.message, required this.isPositive});
 }

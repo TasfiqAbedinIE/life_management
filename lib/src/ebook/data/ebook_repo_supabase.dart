@@ -62,7 +62,23 @@ class EbookRepoSupabase {
 
   /// Signed URL for cover
   Future<String?> getSignedCoverUrl(String? coverPath) async {
-    if (coverPath == null) return null;
-    return _client.storage.from('ebooks').createSignedUrl(coverPath, 3600);
+    final raw = coverPath?.trim() ?? '';
+    if (raw.isEmpty) return null;
+
+    final candidates = <String>[
+      raw,
+      if (!raw.startsWith('covers/')) 'covers/$raw',
+    ];
+
+    for (final path in candidates) {
+      try {
+        final url = await _client.storage.from('ebooks').createSignedUrl(path, 3600);
+        if (url.isNotEmpty) return url;
+      } catch (_) {
+        // Try next candidate.
+      }
+    }
+
+    return null;
   }
 }

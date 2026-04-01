@@ -6,7 +6,6 @@ import 'task_page.dart';
 import 'settings_page.dart';
 import 'dart:async';
 
-import 'shopping_list_home_page.dart';
 import '../coupled/coupled_request_page.dart';
 import '../habits/presentation/habits_page.dart';
 import '../habits/widget/habit_widget_service.dart';
@@ -685,18 +684,6 @@ class _HomePageState extends State<HomePage> {
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const CoupledRequestPage()),
-            );
-          },
-        ),
-        _MinimalActionButton(
-          icon: Image.asset(
-            "assets/icon/shopping_icon.png",
-            fit: BoxFit.contain,
-          ),
-          label: "Shopping",
-          onTap: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ShoppingListHomePage()),
             );
           },
         ),

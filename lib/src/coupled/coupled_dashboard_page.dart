@@ -4,9 +4,10 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-import 'couple_repository.dart';
-import 'tour_plan_section.dart';
 import '../theme/app_theme.dart';
+import 'couple_repository.dart';
+import 'shopping_hub_section.dart';
+import 'tour_plan_section.dart';
 
 class CoupledDashboardPage extends StatefulWidget {
   const CoupledDashboardPage({super.key});
@@ -22,17 +23,16 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
   DateTime? _relationshipDate;
   Timer? _timer;
   Duration _elapsed = Duration.zero;
+  String? _coupleId;
 
   late String _romanticMessage;
   final _messages = const [
-    "Every second with you is my favourite moment. 💕",
-    "You are my today and all of my tomorrows. 🌙",
-    "In a world of billions, my heart chose you. ❤️",
-    "Your smile is the home my soul returns to. 🏡",
-    "Our love story is my favourite notification. 📩",
+    'Every second with you is my favourite moment.',
+    'You are my today and all of my tomorrows.',
+    'In a world of billions, my heart chose you.',
+    'Your smile is the home my soul returns to.',
+    'Our love story is my favourite notification.',
   ];
-
-  String? _coupleId;
 
   @override
   void initState() {
@@ -71,9 +71,7 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
     _timer?.cancel();
     if (_relationshipDate == null) return;
 
-    // Initial calculation
     _updateElapsed();
-
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       _updateElapsed();
     });
@@ -120,13 +118,11 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
         ? const Color(0xFF6B466F)
         : Colors.pinkAccent.withValues(alpha: 0.5);
     final accentColor = isDark ? const Color(0xFFFF8FB1) : Colors.pink.shade700;
-    final mutedText = isDark
-        ? const Color(0xFFD8B9CB)
-        : Colors.grey.shade700;
-
+    final mutedText = isDark ? const Color(0xFFD8B9CB) : Colors.grey.shade700;
     final timeParts = _formatElapsed(_elapsed);
 
     return Scaffold(
+      backgroundColor: Colors.transparent,
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -137,7 +133,7 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
         foregroundColor: accentColor,
       ),
       extendBodyBehindAppBar: true,
-      body: Container(
+      body: DecoratedBox(
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: shellGradient,
@@ -146,6 +142,7 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
           ),
         ),
         child: Stack(
+          fit: StackFit.expand,
           children: [
             Positioned.fill(
               child: Opacity(
@@ -158,141 +155,139 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
               ),
             ),
             SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 20,
-                  vertical: 12,
-                ),
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          const SizedBox(height: 8),
-
-                          /// 💌 Romantic message (tap to change)
-                          GestureDetector(
-                            onTap: _shuffleMessage,
-                            child: Container(
-                              padding: const EdgeInsets.all(18),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(24),
-                                color: cardColor,
-                                boxShadow: [
-                                  BoxShadow(
-                                    blurRadius: 16,
-                                    spreadRadius: 1,
-                                    color: Colors.black.withValues(alpha: 0.18),
-                                    offset: const Offset(0, 10),
-                                  ),
-                                ],
-                                border: Border.all(color: borderColor),
-                              ),
-                              child: Row(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    child: _loading
+                        ? const Center(child: CircularProgressIndicator())
+                        : SingleChildScrollView(
+                            child: ConstrainedBox(
+                              constraints: BoxConstraints(minHeight: constraints.maxHeight - 24),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
-                                  Icon(
-                                    Icons.favorite,
-                                    color: accentColor,
-                                  ),
-                                  const SizedBox(width: 10),
-                                  Expanded(
-                                    child: Text(
-                                      _romanticMessage,
-                                      style: TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w500,
-                                        color: Theme.of(context).colorScheme.onSurface,
+                                  const SizedBox(height: 8),
+                                  GestureDetector(
+                                    onTap: _shuffleMessage,
+                                    child: Container(
+                                      padding: const EdgeInsets.all(18),
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(24),
+                                        color: cardColor,
+                                        boxShadow: [
+                                          BoxShadow(
+                                            blurRadius: 16,
+                                            spreadRadius: 1,
+                                            color: Colors.black.withValues(alpha: 0.18),
+                                            offset: const Offset(0, 10),
+                                          ),
+                                        ],
+                                        border: Border.all(color: borderColor),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(Icons.favorite_rounded, color: accentColor),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Text(
+                                              _romanticMessage,
+                                              style: TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w500,
+                                                color: Theme.of(context).colorScheme.onSurface,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Icon(Icons.auto_awesome_rounded, color: accentColor),
+                                        ],
                                       ),
                                     ),
                                   ),
+                                  const SizedBox(height: 24),
+                                  Container(
+                                    padding: const EdgeInsets.all(16),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(24),
+                                      color: cardColor,
+                                      boxShadow: [
+                                        BoxShadow(
+                                          blurRadius: 18,
+                                          spreadRadius: 2,
+                                          color: Colors.black.withValues(alpha: 0.2),
+                                          offset: const Offset(0, 12),
+                                        ),
+                                      ],
+                                      border: Border.all(color: borderColor),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        ClipRRect(
+                                          borderRadius: BorderRadius.circular(20),
+                                          child: Image.asset(
+                                            counterImage,
+                                            height: 80,
+                                            width: 80,
+                                            fit: BoxFit.cover,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 16),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              const Text(
+                                                'Time together',
+                                                style: TextStyle(
+                                                  fontSize: 18,
+                                                  fontWeight: FontWeight.bold,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              if (_relationshipDate != null)
+                                                Text(
+                                                  'Since ${_relationshipDate!.toLocal().toString().split(' ').first}',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: mutedText,
+                                                  ),
+                                                )
+                                              else
+                                                Text(
+                                                  'Anniversary date not set',
+                                                  style: TextStyle(
+                                                    fontSize: 13,
+                                                    color: isDark
+                                                        ? const Color(0xFFFF9DA9)
+                                                        : Colors.red.shade400,
+                                                  ),
+                                                ),
+                                              const SizedBox(height: 12),
+                                              _relationshipDate == null
+                                                  ? const Text(
+                                                      'Set your anniversary date to start the counter.',
+                                                      style: TextStyle(fontSize: 14),
+                                                    )
+                                                  : _buildTimerRow(timeParts),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (_coupleId != null) ...[
+                                    const SizedBox(height: 20),
+                                    ShoppingHubSection(coupleId: _coupleId!, repo: _repo),
+                                    const SizedBox(height: 20),
+                                    TourPlanSection(coupleId: _coupleId!, repo: _repo),
+                                  ],
                                 ],
                               ),
                             ),
                           ),
-
-                          const SizedBox(height: 24),
-
-                          /// ⏳ Counter block
-                          Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(24),
-                              color: cardColor,
-                              boxShadow: [
-                                BoxShadow(
-                                  blurRadius: 18,
-                                  spreadRadius: 2,
-                                  color: Colors.black.withValues(alpha: 0.2),
-                                  offset: const Offset(0, 12),
-                                ),
-                              ],
-                              border: Border.all(color: borderColor),
-                            ),
-                            child: Row(
-                              children: [
-                                /// Left: picture
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(20),
-                                  child: Image.asset(
-                                    counterImage,
-                                    height: 80,
-                                    width: 80,
-                                    fit: BoxFit.cover,
-                                  ),
-                                ),
-                                const SizedBox(width: 16),
-
-                                /// Right: live timer
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      const Text(
-                                        'Time together',
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      if (_relationshipDate != null)
-                                        Text(
-                                          'Since ${_relationshipDate!.toLocal().toString().split(' ').first}',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: mutedText,
-                                          ),
-                                        )
-                                      else
-                                        Text(
-                                          'Anniversary date not set',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: isDark
-                                                ? const Color(0xFFFF9DA9)
-                                                : Colors.red.shade400,
-                                          ),
-                                        ),
-                                      const SizedBox(height: 12),
-                                      _relationshipDate == null
-                                          ? const Text(
-                                              'Set your anniversary date to start the counter 💞',
-                                              style: TextStyle(fontSize: 14),
-                                            )
-                                          : _buildTimerRow(timeParts),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (_coupleId != null) ...[
-                            const SizedBox(height: 20),
-                            TourPlanSection(coupleId: _coupleId!, repo: _repo),
-                          ],
-                        ],
-                      ),
+                  );
+                },
               ),
             ),
           ],
@@ -301,17 +296,13 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
     );
   }
 
-  /// Convert Duration into (days, hours, minutes, seconds)
   _TimeParts _formatElapsed(Duration d) {
     final totalSeconds = d.inSeconds;
     final secondsInDay = 24 * 60 * 60;
-
     final days = totalSeconds ~/ secondsInDay;
     final remDay = totalSeconds % secondsInDay;
-
     final hours = remDay ~/ 3600;
     final remHour = remDay % 3600;
-
     final minutes = remHour ~/ 60;
     final seconds = remHour % 60;
 
@@ -354,7 +345,7 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
         ),
         const SizedBox(height: 4),
         Text(
-          'Counting every heartbeat together 💗',
+          'Counting every heartbeat together',
           style: TextStyle(fontSize: 12, color: accentColor),
         ),
       ],
@@ -378,7 +369,7 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
 
   Widget _separator() {
     return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 6.0),
+      padding: EdgeInsets.symmetric(horizontal: 6),
       child: Text(
         ':',
         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),

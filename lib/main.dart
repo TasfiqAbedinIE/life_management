@@ -2,15 +2,17 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'src/bootstrap/app_bootstrap.dart';
-import 'src/habits/widget/habit_widget_service.dart';
+import 'src/bootstrap/settings_bootstrap.dart';
 import 'src/habits/presentation/habits_page.dart';
-import 'src/pages/home_page.dart';
-import 'src/pages/sign_in_page.dart';
-import 'src/pages/update_password_page.dart';
+import 'src/habits/widget/habit_widget_service.dart';
+import 'src/pages/app_entry_page.dart';
 import 'src/services/habit_notification_service.dart';
 import 'src/theme/app_theme.dart';
-import 'src/bootstrap/settings_bootstrap.dart';
 
+/// Place this file at: lib/main.dart
+///
+/// The app now starts through [AppEntryPage], which handles first-launch
+/// onboarding before handing off to the existing auth flow.
 Future<void> main() async {
   await AppBootstrap.ensureInitialized();
   await HabitWidgetService.initialize();
@@ -78,13 +80,11 @@ class _TaskAppState extends State<TaskApp> with WidgetsBindingObserver {
               builder: (context, child) {
                 final mediaQuery = MediaQuery.of(context);
 
-                // Flutter 3.16+: use textScaler
                 return MediaQuery(
                   data: mediaQuery.copyWith(
                     textScaler: mediaQuery.textScaler.clamp(
                       minScaleFactor: 1.0,
-                      maxScaleFactor:
-                          1.0, // change to 1.1 or 1.2 if you want slight scaling
+                      maxScaleFactor: 1.0,
                     ),
                   ),
                   child: child!,
@@ -94,45 +94,12 @@ class _TaskAppState extends State<TaskApp> with WidgetsBindingObserver {
               theme: AppTheme.lightTheme(font),
               darkTheme: AppTheme.darkTheme(font),
               themeMode: mode,
-              home: SettingsBootstrap(child: const AuthGate()),
+              home: const SettingsBootstrap(
+                child: AppEntryPage(),
+              ),
             );
           },
         );
-      },
-    );
-  }
-}
-
-class AuthGate extends StatelessWidget {
-  const AuthGate({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final supa = Supabase.instance.client;
-
-    return StreamBuilder<AuthState>(
-      stream: supa.auth.onAuthStateChange,
-      builder: (context, snapshot) {
-        final event = snapshot.data?.event;
-        final session = supa.auth.currentSession;
-
-        // Optional loading state for first build
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        }
-
-        if (event == AuthChangeEvent.passwordRecovery) {
-          return const UpdatePasswordPage();
-        }
-
-        if (session != null) {
-          // ✅ User stays logged in across app restarts
-          return const HomePage();
-        } else {
-          return const SignInPage();
-        }
       },
     );
   }

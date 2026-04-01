@@ -225,4 +225,163 @@ class CoupleRepository {
       return 'Failed to delete tour plan';
     }
   }
+
+  // ===== SHOPPING LISTS =====
+
+  Future<List<Map<String, dynamic>>> fetchShoppingLists(String coupleId) async {
+    final res = await _client
+        .from('shopping_lists')
+        .select('id, name, description, created_at, owner_id, couple_id')
+        .eq('couple_id', coupleId)
+        .order('created_at', ascending: false);
+
+    if (res is List) {
+      return res.map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    return [];
+  }
+
+  Future<String?> createShoppingList({
+    required String coupleId,
+    required String name,
+    String? description,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return 'Not authenticated';
+
+    try {
+      await _client.from('shopping_lists').insert({
+        'owner_id': user.id,
+        'couple_id': coupleId,
+        'name': name,
+        'description': description,
+        // Kept for backward compatibility with the existing schema.
+        'is_shared': true,
+      });
+      return null;
+    } catch (_) {
+      return 'Failed to create shopping list';
+    }
+  }
+
+  Future<Map<String, dynamic>> fetchShoppingList(String listId) async {
+    final res = await _client
+        .from('shopping_lists')
+        .select('id, name, description, owner_id, couple_id')
+        .eq('id', listId)
+        .single();
+
+    return Map<String, dynamic>.from(res as Map);
+  }
+
+  Future<List<Map<String, dynamic>>> fetchShoppingItems(String listId) async {
+    final res = await _client
+        .from('shopping_items')
+        .select(
+          'id, name, quantity, tag, target_date, urgency, note, is_done, created_at, created_by',
+        )
+        .eq('list_id', listId)
+        .order('is_done', ascending: true)
+        .order('target_date', ascending: true);
+
+    if (res is List) {
+      return res.map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    return [];
+  }
+
+  Future<Map<String, Map<String, dynamic>>> fetchProfilesByIds(
+    Iterable<String> userIds,
+  ) async {
+    final ids = userIds.where((id) => id.isNotEmpty).toSet().toList();
+    if (ids.isEmpty) return {};
+
+    final res = await _client
+        .from('profiles')
+        .select('id, full_name, email')
+        .inFilter('id', ids);
+
+    final profiles = List<Map<String, dynamic>>.from(res as List);
+    return {for (final p in profiles) p['id'] as String: p};
+  }
+
+  Future<String?> setShoppingItemDone({
+    required String itemId,
+    required bool isDone,
+  }) async {
+    try {
+      await _client
+          .from('shopping_items')
+          .update({'is_done': isDone})
+          .eq('id', itemId);
+      return null;
+    } catch (_) {
+      return 'Failed to update item';
+    }
+  }
+
+  Future<String?> addShoppingItem({
+    required String listId,
+    required String name,
+    String? quantity,
+    required String tag,
+    required String urgency,
+    String? note,
+    DateTime? targetDate,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return 'Not authenticated';
+
+    try {
+      await _client.from('shopping_items').insert({
+        'list_id': listId,
+        'name': name,
+        'quantity': quantity,
+        'tag': tag,
+        'urgency': urgency,
+        'note': note,
+        'target_date': targetDate?.toIso8601String().split('T').first,
+        'created_by': user.id,
+      });
+      return null;
+    } catch (_) {
+      return 'Failed to save item';
+    }
+  }
+
+  Future<String?> updateShoppingItem({
+    required String itemId,
+    required String name,
+    String? quantity,
+    required String tag,
+    required String urgency,
+    String? note,
+    DateTime? targetDate,
+  }) async {
+    try {
+      await _client
+          .from('shopping_items')
+          .update({
+            'name': name,
+            'quantity': quantity,
+            'tag': tag,
+            'urgency': urgency,
+            'note': note,
+            'target_date': targetDate?.toIso8601String().split('T').first,
+          })
+          .eq('id', itemId);
+      return null;
+    } catch (_) {
+      return 'Failed to save item';
+    }
+  }
+
+  Future<String?> deleteShoppingItem(String itemId) async {
+    try {
+      await _client.from('shopping_items').delete().eq('id', itemId);
+      return null;
+    } catch (_) {
+      return 'Failed to delete item';
+    }
+  }
 }

@@ -1,24 +1,26 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-final _supabase = Supabase.instance.client;
+import 'couple_repository.dart';
 
-class ShoppingListDetailPage extends StatefulWidget {
+class CoupleShoppingDetailPage extends StatefulWidget {
   final String listId;
+  final CoupleRepository repo;
 
-  const ShoppingListDetailPage({super.key, required this.listId});
+  const CoupleShoppingDetailPage({
+    super.key,
+    required this.listId,
+    required this.repo,
+  });
 
   @override
-  State<ShoppingListDetailPage> createState() => _ShoppingListDetailPageState();
+  State<CoupleShoppingDetailPage> createState() => _CoupleShoppingDetailPageState();
 }
 
-class _ShoppingListDetailPageState extends State<ShoppingListDetailPage> {
+class _CoupleShoppingDetailPageState extends State<CoupleShoppingDetailPage> {
   Map<String, dynamic>? _listMeta;
   List<Map<String, dynamic>> _items = [];
-
-  // 👇 NEW: profile cache by userId
   Map<String, Map<String, dynamic>> _userProfiles = {};
-
   bool _isLoading = true;
 
   @override
@@ -31,48 +33,23 @@ class _ShoppingListDetailPageState extends State<ShoppingListDetailPage> {
     setState(() => _isLoading = true);
 
     try {
-      // 1) list meta (including owner_id)
-      final listRes = await _supabase
-          .from('shopping_lists')
-          .select('id, name, description, is_shared, owner_id')
-          .eq('id', widget.listId)
-          .single();
+      final listMeta = await widget.repo.fetchShoppingList(widget.listId);
+      final items = await widget.repo.fetchShoppingItems(widget.listId);
 
-      final listMeta = Map<String, dynamic>.from(listRes as Map);
-
-      // 2) items (including created_by)
-      final itemsRes = await _supabase
-          .from('shopping_items')
-          .select(
-            'id, name, quantity, tag, target_date, urgency, note, is_done, created_at, created_by',
-          )
-          .eq('list_id', widget.listId)
-          .order('is_done', ascending: true)
-          .order('target_date', ascending: true);
-
-      final items = List<Map<String, dynamic>>.from(itemsRes as List);
-
-      // 3) collect userIds (owner + creators)
       final userIds = <String>{};
       final ownerId = listMeta['owner_id'] as String?;
       if (ownerId != null) userIds.add(ownerId);
 
-      for (final it in items) {
-        final cb = it['created_by'];
-        if (cb != null) userIds.add(cb as String);
+      for (final item in items) {
+        final createdBy = item['created_by'];
+        if (createdBy != null) userIds.add(createdBy as String);
       }
 
-      Map<String, Map<String, dynamic>> profileMap = {};
-      if (userIds.isNotEmpty) {
-        final profRes = await _supabase
-            .from('profiles')
-            .select('id, full_name, email')
-            .inFilter('id', userIds.toList());
+      final profileMap = userIds.isEmpty
+          ? <String, Map<String, dynamic>>{}
+          : await widget.repo.fetchProfilesByIds(userIds);
 
-        final profs = List<Map<String, dynamic>>.from(profRes as List);
-        profileMap = {for (final p in profs) p['id'] as String: p};
-      }
-
+      if (!mounted) return;
       setState(() {
         _listMeta = listMeta;
         _items = items;
@@ -80,6 +57,7 @@ class _ShoppingListDetailPageState extends State<ShoppingListDetailPage> {
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() => _isLoading = false);
       ScaffoldMessenger.of(
         context,
@@ -88,26 +66,27 @@ class _ShoppingListDetailPageState extends State<ShoppingListDetailPage> {
   }
 
   Future<void> _toggleItemDone(Map<String, dynamic> item) async {
-    final id = item['id'];
+    final itemId = item['id'] as String;
     final newValue = !(item['is_done'] as bool? ?? false);
 
-    try {
-      await _supabase
-          .from('shopping_items')
-          .update({'is_done': newValue})
-          .eq('id', id);
+    final error = await widget.repo.setShoppingItemDone(
+      itemId: itemId,
+      isDone: newValue,
+    );
 
-      setState(() {
-        final idx = _items.indexWhere((it) => it['id'] == id);
-        if (idx != -1) {
-          _items[idx] = {..._items[idx], 'is_done': newValue};
-        }
-      });
-    } catch (e) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to update item: $e')));
+    if (!mounted) return;
+
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      return;
     }
+
+    setState(() {
+      final index = _items.indexWhere((it) => it['id'] == itemId);
+      if (index != -1) {
+        _items[index] = {..._items[index], 'is_done': newValue};
+      }
+    });
   }
 
   Future<void> _openAddOrEditItemSheet({Map<String, dynamic>? item}) async {
@@ -119,10 +98,12 @@ class _ShoppingListDetailPageState extends State<ShoppingListDetailPage> {
       ),
       builder: (context) {
         return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
+          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+          child: _AddOrEditItemSheet(
+            listId: widget.listId,
+            repo: widget.repo,
+            existingItem: item,
           ),
-          child: AddOrEditItemSheet(listId: widget.listId, existingItem: item),
         );
       },
     );
@@ -132,94 +113,8 @@ class _ShoppingListDetailPageState extends State<ShoppingListDetailPage> {
     }
   }
 
-  Future<void> _showInviteFriendDialog() async {
-    final emailCtrl = TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (_) {
-        return AlertDialog(
-          title: const Text('Invite friend'),
-          content: TextField(
-            controller: emailCtrl,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(labelText: 'Friend\'s email'),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final email = emailCtrl.text.trim();
-                if (email.isEmpty) return;
-
-                try {
-                  await _inviteByEmail(email);
-                  if (context.mounted) {
-                    Navigator.pop(context);
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Friend added to this list!'),
-                      ),
-                    );
-                  }
-                } catch (e) {
-                  if (context.mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text(e.toString())));
-                  }
-                }
-              },
-              child: const Text('Invite'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
-  Future<void> _inviteByEmail(String email) async {
-    // 1) Look up the user in profiles by email
-    final profilesRes = await _supabase
-        .from('profiles')
-        .select('id, email, full_name')
-        .eq('email', email);
-
-    final profiles = List<Map<String, dynamic>>.from(profilesRes as List);
-
-    if (profiles.isEmpty) {
-      throw Exception(
-        'No user found with this email. '
-        'Make sure they have signed up in the app.',
-      );
-    }
-
-    final friend = profiles.first;
-    final friendId = friend['id'] as String;
-
-    // 2) Add as member (user_id is Supabase Auth user.id)
-    await _supabase.from('shopping_list_members').insert({
-      'list_id': widget.listId,
-      'user_id': friendId,
-      'role': 'editor',
-    });
-
-    // 3) Ensure list is marked as shared
-    await _supabase
-        .from('shopping_lists')
-        .update({'is_shared': true})
-        .eq('id', widget.listId);
-
-    // 4) Refresh UI
-    await _loadAll();
-  }
-
   Future<void> _confirmAndDeleteItem(Map<String, dynamic> item) async {
     final name = item['name']?.toString() ?? 'this item';
-
     final shouldDelete = await showDialog<bool>(
       context: context,
       builder: (_) {
@@ -241,29 +136,15 @@ class _ShoppingListDetailPageState extends State<ShoppingListDetailPage> {
     );
 
     if (shouldDelete == true) {
-      await _deleteItem(item);
-    }
-  }
-
-  Future<void> _deleteItem(Map<String, dynamic> item) async {
-    final id = item['id'];
-    try {
-      await _supabase.from('shopping_items').delete().eq('id', id);
-
-      setState(() {
-        _items.removeWhere((it) => it['id'] == id);
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Item deleted')));
-      }
-    } catch (e) {
+      final error = await widget.repo.deleteShoppingItem(item['id'] as String);
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to delete item: $e')));
+      if (error != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+        return;
+      }
+      setState(() {
+        _items.removeWhere((it) => it['id'] == item['id']);
+      });
     }
   }
 
@@ -272,16 +153,7 @@ class _ShoppingListDetailPageState extends State<ShoppingListDetailPage> {
     final title = _listMeta?['name']?.toString() ?? 'Shopping List';
 
     return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-        actions: [
-          IconButton(
-            tooltip: 'Invite friend',
-            icon: const Icon(Icons.person_add_alt_1),
-            onPressed: _showInviteFriendDialog,
-          ),
-        ],
-      ),
+      appBar: AppBar(title: Text(title)),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _openAddOrEditItemSheet(),
         icon: const Icon(Icons.add),
@@ -297,7 +169,7 @@ class _ShoppingListDetailPageState extends State<ShoppingListDetailPage> {
                       children: const [
                         SizedBox(height: 80),
                         Padding(
-                          padding: EdgeInsets.all(24.0),
+                          padding: EdgeInsets.all(24),
                           child: Center(
                             child: Text(
                               'No items yet.\nTap "Add item" to start.',
@@ -313,7 +185,7 @@ class _ShoppingListDetailPageState extends State<ShoppingListDetailPage> {
                       itemCount: _items.length,
                       itemBuilder: (context, index) {
                         final item = _items[index];
-                        return ShoppingItemTile(
+                        return _ShoppingItemTile(
                           item: item,
                           creatorProfile: _userProfiles[item['created_by']],
                           onToggleDone: () => _toggleItemDone(item),
@@ -327,17 +199,14 @@ class _ShoppingListDetailPageState extends State<ShoppingListDetailPage> {
   }
 }
 
-class ShoppingItemTile extends StatelessWidget {
+class _ShoppingItemTile extends StatelessWidget {
   final Map<String, dynamic> item;
   final Map<String, dynamic>? creatorProfile;
   final VoidCallback onToggleDone;
   final VoidCallback onEdit;
-
-  // 👇 NEW
   final VoidCallback onDelete;
 
-  const ShoppingItemTile({
-    super.key,
+  const _ShoppingItemTile({
     required this.item,
     required this.creatorProfile,
     required this.onToggleDone,
@@ -364,7 +233,7 @@ class ShoppingItemTile extends StatelessWidget {
     if (creatorProfile != null) {
       final fullName = (creatorProfile!['full_name'] as String?)?.trim();
       final email = creatorProfile!['email'] as String?;
-      final currentUserId = _supabase.auth.currentUser?.id;
+      final currentUserId = Supabase.instance.client.auth.currentUser?.id;
       final creatorId = creatorProfile!['id'] as String?;
 
       if (creatorId != null && creatorId == currentUserId) {
@@ -388,7 +257,6 @@ class ShoppingItemTile extends StatelessWidget {
         urgencyColor = Colors.orange;
     }
 
-    // 🔹 COMPACT CARD
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -397,14 +265,11 @@ class ShoppingItemTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            // Checkbox
             Checkbox(
               value: isDone,
               onChanged: (_) => onToggleDone(),
               visualDensity: VisualDensity.compact,
             ),
-
-            // Main content
             Expanded(
               child: InkWell(
                 onTap: onEdit,
@@ -414,14 +279,12 @@ class ShoppingItemTile extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // First row: name + qty
                       Row(
                         children: [
                           Expanded(
                             child: Text(
-                              qty.isNotEmpty ? '$name · $qty' : name,
-                              style: Theme.of(context).textTheme.bodyLarge
-                                  ?.copyWith(
+                              qty.isNotEmpty ? '$name - $qty' : name,
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                                     decoration: isDone
                                         ? TextDecoration.lineThrough
                                         : TextDecoration.none,
@@ -432,44 +295,37 @@ class ShoppingItemTile extends StatelessWidget {
                           ),
                         ],
                       ),
-
                       const SizedBox(height: 2),
-
-                      // Second row: tag, date
                       Row(
                         children: [
-                          // Tag
                           Text(
                             tag,
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: Colors.grey[700]),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Colors.grey[700],
+                                ),
                           ),
                           if (targetDate != null) ...[
                             const SizedBox(width: 8),
-                            Icon(
-                              Icons.calendar_today,
-                              size: 14,
-                              color: Colors.grey[600],
-                            ),
+                            Icon(Icons.calendar_today, size: 14, color: Colors.grey[600]),
                             const SizedBox(width: 2),
                             Text(
                               '${targetDate.day.toString().padLeft(2, '0')}-'
                               '${targetDate.month.toString().padLeft(2, '0')}-'
                               '${targetDate.year}',
-                              style: Theme.of(context).textTheme.bodySmall
-                                  ?.copyWith(color: Colors.grey[700]),
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Colors.grey[700],
+                                  ),
                             ),
                           ],
                         ],
                       ),
-
-                      // Optional note / added by (smaller, single line each)
                       if (note.isNotEmpty) ...[
                         const SizedBox(height: 2),
                         Text(
                           note,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: Colors.grey[600]),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.grey[600],
+                              ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -478,8 +334,10 @@ class ShoppingItemTile extends StatelessWidget {
                         const SizedBox(height: 1),
                         Text(
                           addedByLabel,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(color: Colors.grey[500], fontSize: 10),
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: Colors.grey[500],
+                                fontSize: 10,
+                              ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -489,12 +347,9 @@ class ShoppingItemTile extends StatelessWidget {
                 ),
               ),
             ),
-
-            // Right side: urgency dot + edit/delete icons
             Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // urgency dot
                 _Ribbon(color: urgencyColor),
                 Row(
                   mainAxisSize: MainAxisSize.min,
@@ -502,19 +357,13 @@ class ShoppingItemTile extends StatelessWidget {
                     IconButton(
                       icon: const Icon(Icons.edit, size: 18),
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 32,
-                        minHeight: 32,
-                      ),
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                       onPressed: onEdit,
                     ),
                     IconButton(
                       icon: const Icon(Icons.delete_outline, size: 18),
                       padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(
-                        minWidth: 32,
-                        minHeight: 32,
-                      ),
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                       onPressed: onDelete,
                     ),
                   ],
@@ -536,7 +385,7 @@ class _Ribbon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      size: const Size(12, 26), // ribbon size
+      size: const Size(12, 26),
       painter: _RibbonPainter(color),
     );
   }
@@ -550,7 +399,6 @@ class _RibbonPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
-
     final path = Path()
       ..moveTo(0, 0)
       ..lineTo(size.width, 0)
@@ -566,21 +414,22 @@ class _RibbonPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-class AddOrEditItemSheet extends StatefulWidget {
+class _AddOrEditItemSheet extends StatefulWidget {
   final String listId;
+  final CoupleRepository repo;
   final Map<String, dynamic>? existingItem;
 
-  const AddOrEditItemSheet({
-    super.key,
+  const _AddOrEditItemSheet({
     required this.listId,
+    required this.repo,
     this.existingItem,
   });
 
   @override
-  State<AddOrEditItemSheet> createState() => _AddOrEditItemSheetState();
+  State<_AddOrEditItemSheet> createState() => _AddOrEditItemSheetState();
 }
 
-class _AddOrEditItemSheetState extends State<AddOrEditItemSheet> {
+class _AddOrEditItemSheetState extends State<_AddOrEditItemSheet> {
   final _formKey = GlobalKey<FormState>();
   final _nameCtrl = TextEditingController();
   final _qtyCtrl = TextEditingController();
@@ -596,7 +445,7 @@ class _AddOrEditItemSheetState extends State<AddOrEditItemSheet> {
   ];
 
   String _selectedTag = 'Groceries';
-  String _urgency = 'medium'; // low, medium, high
+  String _urgency = 'medium';
   DateTime? _targetDate;
   bool _isSaving = false;
 
@@ -610,7 +459,6 @@ class _AddOrEditItemSheetState extends State<AddOrEditItemSheet> {
       _noteCtrl.text = item['note']?.toString() ?? '';
       _selectedTag = item['tag']?.toString() ?? _selectedTag;
       _urgency = item['urgency']?.toString() ?? _urgency;
-
       final rawDate = item['target_date'];
       if (rawDate != null) {
         _targetDate = DateTime.tryParse(rawDate.toString());
@@ -635,7 +483,6 @@ class _AddOrEditItemSheetState extends State<AddOrEditItemSheet> {
       firstDate: now.subtract(const Duration(days: 365)),
       lastDate: now.add(const Duration(days: 365 * 3)),
     );
-
     if (picked != null) {
       setState(() => _targetDate = picked);
     }
@@ -646,44 +493,35 @@ class _AddOrEditItemSheetState extends State<AddOrEditItemSheet> {
 
     setState(() => _isSaving = true);
 
-    try {
-      final user = _supabase.auth.currentUser;
-      if (user == null) {
-        throw Exception('Not logged in');
-      }
+    final error = widget.existingItem == null
+        ? await widget.repo.addShoppingItem(
+            listId: widget.listId,
+            name: _nameCtrl.text.trim(),
+            quantity: _qtyCtrl.text.trim().isEmpty ? null : _qtyCtrl.text.trim(),
+            tag: _selectedTag,
+            urgency: _urgency,
+            note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+            targetDate: _targetDate,
+          )
+        : await widget.repo.updateShoppingItem(
+            itemId: widget.existingItem!['id'] as String,
+            name: _nameCtrl.text.trim(),
+            quantity: _qtyCtrl.text.trim().isEmpty ? null : _qtyCtrl.text.trim(),
+            tag: _selectedTag,
+            urgency: _urgency,
+            note: _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
+            targetDate: _targetDate,
+          );
 
-      final payload = <String, dynamic>{
-        'list_id': widget.listId,
-        'name': _nameCtrl.text.trim(),
-        'quantity': _qtyCtrl.text.trim().isEmpty ? null : _qtyCtrl.text.trim(),
-        'tag': _selectedTag,
-        'urgency': _urgency,
-        'note': _noteCtrl.text.trim().isEmpty ? null : _noteCtrl.text.trim(),
-        'target_date': _targetDate?.toIso8601String().split('T').first,
-        'created_by': user.id,
-      };
+    if (!mounted) return;
 
-      if (widget.existingItem == null) {
-        // insert
-        await _supabase.from('shopping_items').insert(payload);
-      } else {
-        // update
-        await _supabase
-            .from('shopping_items')
-            .update(payload)
-            .eq('id', widget.existingItem!['id']);
-      }
-
-      if (mounted) Navigator.pop(context, true);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to save item: $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _isSaving = false);
+    if (error != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+      setState(() => _isSaving = false);
+      return;
     }
+
+    Navigator.pop(context, true);
   }
 
   @override
@@ -721,8 +559,7 @@ class _AddOrEditItemSheetState extends State<AddOrEditItemSheet> {
                       labelText: 'Item name',
                       hintText: 'e.g. Rice, Electric kettle',
                     ),
-                    validator: (v) =>
-                        v == null || v.trim().isEmpty ? 'Required' : null,
+                    validator: (v) => v == null || v.trim().isEmpty ? 'Required' : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -735,11 +572,9 @@ class _AddOrEditItemSheetState extends State<AddOrEditItemSheet> {
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
                     value: _selectedTag,
-                    items: _tags
-                        .map((t) => DropdownMenuItem(value: t, child: Text(t)))
-                        .toList(),
-                    onChanged: (v) {
-                      if (v != null) setState(() => _selectedTag = v);
+                    items: _tags.map((tag) => DropdownMenuItem(value: tag, child: Text(tag))).toList(),
+                    onChanged: (value) {
+                      if (value != null) setState(() => _selectedTag = value);
                     },
                     decoration: const InputDecoration(labelText: 'Category'),
                   ),
@@ -777,9 +612,9 @@ class _AddOrEditItemSheetState extends State<AddOrEditItemSheet> {
                           _targetDate == null
                               ? 'No date selected'
                               : 'Purchase on: '
-                                    '${_targetDate!.day.toString().padLeft(2, '0')}-'
-                                    '${_targetDate!.month.toString().padLeft(2, '0')}-'
-                                    '${_targetDate!.year}',
+                                  '${_targetDate!.day.toString().padLeft(2, '0')}-'
+                                  '${_targetDate!.month.toString().padLeft(2, '0')}-'
+                                  '${_targetDate!.year}',
                         ),
                       ),
                       TextButton.icon(
@@ -804,9 +639,7 @@ class _AddOrEditItemSheetState extends State<AddOrEditItemSheet> {
                     child: ElevatedButton.icon(
                       onPressed: _isSaving ? null : _save,
                       icon: const Icon(Icons.check),
-                      label: Text(
-                        _isSaving ? 'Saving...' : (isEdit ? 'Update' : 'Save'),
-                      ),
+                      label: Text(_isSaving ? 'Saving...' : (isEdit ? 'Update' : 'Save')),
                     ),
                   ),
                 ],

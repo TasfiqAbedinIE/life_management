@@ -12,6 +12,7 @@ import '../habits/widget/habit_widget_service.dart';
 import '../notes/pages/notes_list_page.dart';
 import '../ebook/ui/ebook_library_page.dart';
 import '../budgeting/presentation/budgeting_page.dart';
+import '../project_management/presentation/project_management_page.dart';
 import '../theme/app_theme.dart';
 
 class HomePage extends StatefulWidget {
@@ -207,16 +208,21 @@ class _HomePageState extends State<HomePage> {
     required ThemeData theme,
   }) {
     final hour = _now.hour;
+    final displayName = name == 'there' ? 'Friend' : name;
+    final spotlight = hour >= 18 || hour < 6 ? 'Reset' : 'Today';
+    final accentLine = hour >= 18 || hour < 6
+        ? 'Close the day with one thing done well.'
+        : 'Make the next hour count.';
 
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: AppPalette.heroGradient(context),
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(26),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.18),
@@ -228,26 +234,35 @@ class _HomePageState extends State<HomePage> {
       child: Stack(
         children: [
           Positioned(
-            top: -30,
-            right: -18,
-            child: Container(
-              width: 110,
-              height: 110,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
+            right: -10,
+            top: -2,
+            child: Text(
+              spotlight.toUpperCase(),
+              style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.08),
+                fontSize: 56,
+                fontWeight: FontWeight.w900,
+                letterSpacing: 1.2,
+                height: 1,
               ),
             ),
           ),
           Positioned(
-            bottom: -42,
-            left: -24,
+            right: 28,
+            top: 22,
             child: Container(
-              width: 120,
-              height: 120,
+              width: 10,
+              height: 10,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.05),
+                color: const Color(0xFFFFD66B).withValues(alpha: 0.95),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFFD66B).withValues(alpha: 0.45),
+                    blurRadius: 20,
+                    spreadRadius: 2,
+                  ),
+                ],
               ),
             ),
           ),
@@ -255,123 +270,70 @@ class _HomePageState extends State<HomePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 10,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.14),
-                            borderRadius: BorderRadius.circular(999),
-                          ),
-                          child: Text(
-                            _timeContextLabel(hour),
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.2,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        Text(
-                          '$greeting, $name',
-                          style: theme.textTheme.headlineSmall?.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w800,
-                            height: 1.05,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          _headerSupportText(hour),
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.86),
-                            fontSize: 12.5,
-                            height: 1.35,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 14),
                   Container(
                     padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 12,
+                      horizontal: 10,
+                      vertical: 6,
                     ),
                     decoration: BoxDecoration(
                       color: Colors.white.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Text(
+                      _formatCompactDate(_now),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Container(
-                          width: 40,
-                          height: 40,
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.14),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Icon(
-                            _iconForTime(hour),
-                            color: const Color(0xFFFFD66B),
-                            size: 22,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        Text(
-                          _formatCompactTime(_now),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _formatCompactDate(_now),
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.78),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
+                  ),
+                  const Spacer(),
+                  Text(
+                    _formatCompactTime(_now),
+                    style: TextStyle(
+                      color: Colors.white.withValues(alpha: 0.88),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.3,
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 14),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  _headerPill(
-                    icon: Icons.calendar_today_rounded,
-                    label: '${_weekdayShortLabel(_now)} plan',
-                  ),
-                  _headerPill(
-                    icon: Icons.schedule_rounded,
-                    label: 'Updated live',
-                  ),
-                  _headerPill(
-                    icon: Icons.wb_twilight_rounded,
-                    label: _timeContextLabel(hour),
-                  ),
-                ],
+              const SizedBox(height: 22),
+              Text(
+                greeting,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.78),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 6),
+              RichText(
+                text: TextSpan(
+                  children: [
+                    TextSpan(
+                      text: '$displayName\n',
+                      style: theme.textTheme.headlineMedium?.copyWith(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        height: 0.95,
+                      ),
+                    ),
+                    TextSpan(
+                      text: accentLine,
+                      style: TextStyle(
+                        color: Colors.white.withValues(alpha: 0.88),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -474,67 +436,6 @@ class _HomePageState extends State<HomePage> {
             padding: EdgeInsets.zero,
             physics: const AlwaysScrollableScrollPhysics(),
             children: [
-              Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-                child: _buildCompactHeader(
-                  context,
-                  greeting: greeting,
-                  name: name,
-                  theme: theme,
-                ),
-              ),
-
-              /*
-                        children: [
-                          Text(
-                            '$greeting, $name 👋',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 20,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          // Text(
-                          //   'Let’s make today a productive day.',
-                          //   style: TextStyle(
-                          //     color: Colors.blue[100],
-                          //     fontSize: 13,
-                          //   ),
-                          // ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          '${_now.hour.toString().padLeft(2, '0')}:${_now.minute.toString().padLeft(2, '0')}',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                        Text(
-                          '${_now.day.toString().padLeft(2, '0')}-${_now.month.toString().padLeft(2, '0')}-${_now.year}',
-                          style: TextStyle(
-                            color: isDark
-                                ? const Color(0xFFBBD0FF)
-                                : Colors.blue[100],
-                            fontSize: 10,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            */
-              const SizedBox(height: 12),
-
               // Main content – rounded white container
               Container(
                 decoration: BoxDecoration(
@@ -725,6 +626,19 @@ class _HomePageState extends State<HomePage> {
             Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const EbookLibraryPage()));
+          },
+        ),
+        _MinimalActionButton(
+          icon: Icon(
+            Icons.dashboard_customize_rounded,
+            color: Theme.of(context).colorScheme.primary,
+            size: 24,
+          ),
+          label: "Projects",
+          onTap: () {
+            Navigator.of(
+              context,
+            ).push(MaterialPageRoute(builder: (_) => ProjectManagementPage()));
           },
         ),
         _MinimalActionButton(

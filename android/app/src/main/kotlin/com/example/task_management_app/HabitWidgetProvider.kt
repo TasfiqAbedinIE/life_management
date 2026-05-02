@@ -76,7 +76,7 @@ class HabitWidgetProvider : HomeWidgetProvider() {
         val launchIntent = HomeWidgetLaunchIntent.getActivity(
             context,
             MainActivity::class.java,
-            Uri.parse("tasksparrow://open-habits?homeWidget=1")
+            Uri.parse("wrapco://open-habits?homeWidget=1")
         )
         views.setOnClickPendingIntent(R.id.widget_root, launchIntent)
         views.setOnClickPendingIntent(R.id.widget_open_button, launchIntent)
@@ -128,11 +128,11 @@ class HabitWidgetProvider : HomeWidgetProvider() {
 
         val decrementIntent = HomeWidgetBackgroundIntent.getBroadcast(
             context,
-            Uri.parse("tasksparrow://habit-widget-action?action=decrement&habitId=$id")
+            Uri.parse("wrapco://habit-widget-action?action=decrement&habitId=$id")
         )
         val incrementIntent = HomeWidgetBackgroundIntent.getBroadcast(
             context,
-            Uri.parse("tasksparrow://habit-widget-action?action=increment&habitId=$id")
+            Uri.parse("wrapco://habit-widget-action?action=increment&habitId=$id")
         )
 
         views.setOnClickPendingIntent(minusId, decrementIntent)

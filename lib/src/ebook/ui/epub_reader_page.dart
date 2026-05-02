@@ -68,13 +68,15 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
     final prefs = await SharedPreferences.getInstance();
     final savedCfi = prefs.getString(_resumeCfiKey);
     final savedProgress = prefs.getDouble(_resumeProgressKey);
+    final effectiveProgress = [
+      widget.initialProgress,
+      savedProgress ?? 0.0,
+    ].reduce((a, b) => a > b ? a : b).clamp(0.0, 1.0).toDouble();
 
     if (!mounted) return;
     setState(() {
       _resumeCfi = savedCfi;
-      if (savedProgress != null && savedProgress > _currentProgress) {
-        _currentProgress = savedProgress.clamp(0.0, 1.0).toDouble();
-      }
+      _currentProgress = effectiveProgress;
       _resumeReady = true;
     });
   }

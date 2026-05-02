@@ -142,7 +142,7 @@ class _SignUpPageState extends State<SignUpPage>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'SPARROW',
+                              'WrapCo.',
                               style: TextStyle(
                                 fontSize: 34,
                                 fontWeight: FontWeight.w900,
@@ -206,7 +206,7 @@ class _SignUpPageState extends State<SignUpPage>
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          'Join SPARROW and stay in control.',
+                          'Join WrapCo. and stay in control.',
                           style: TextStyle(color: Colors.black),
                         ),
                         const SizedBox(height: 14),

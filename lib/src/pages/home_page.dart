@@ -32,7 +32,7 @@ class _HomePageState extends State<HomePage> {
   int _currentQuoteIndex = 0;
   Timer? _quoteTimer;
 
-  String _selectedLabel = 'OFFICE'; // OFFICE | HOME | PERSONAL
+  String _selectedLabel = 'OFFICE'; // OFFICE | PERSONAL
 
   void _advanceQuote() {
     if (_quotes.isEmpty) return;
@@ -658,8 +658,8 @@ class _HomePageState extends State<HomePage> {
   }
 
   Widget _labelFilterChips() {
-    final labels = ['OFFICE', 'HOME', 'PERSONAL'];
-    final pretty = {'OFFICE': 'Office', 'HOME': 'Home', 'PERSONAL': 'Personal'};
+    final labels = ['OFFICE', 'PERSONAL'];
+    final pretty = {'OFFICE': 'Office', 'PERSONAL': 'Personal'};
 
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
@@ -862,7 +862,6 @@ class _HomePageState extends State<HomePage> {
       case 'OFFICE':
         plannedMinutesPerDay = officeMinutes;
         break;
-      case 'HOME':
       case 'PERSONAL':
         plannedMinutesPerDay = personalMinutes;
         break;
@@ -886,12 +885,15 @@ class _HomePageState extends State<HomePage> {
       ).subtract(Duration(days: i));
       final dayStr = day.toIso8601String().split('T').first;
 
-      final rows = await supabase
+      final query = supabase
           .from('tasks')
           .select('total_spent_minutes')
           .eq('user_id', user.id)
-          .eq('start_date', dayStr)
-          .eq('label', label); // ← filter by Office/Home/Personal
+          .eq('start_date', dayStr);
+
+      final rows = label == 'PERSONAL'
+          ? await query.inFilter('label', ['PERSONAL', 'HOME'])
+          : await query.eq('label', label);
 
       int totalSeconds = 0;
       for (final row in rows) {
@@ -1048,9 +1050,6 @@ class _EfficiencyCard extends StatelessWidget {
       case 'OFFICE':
         prettyLabel = 'Office';
         break;
-      case 'HOME':
-        prettyLabel = 'Home';
-        break;
       case 'PERSONAL':
         prettyLabel = 'Personal';
         break;
@@ -1061,7 +1060,7 @@ class _EfficiencyCard extends StatelessWidget {
     String plannedLabel;
     if (selectedLabel == 'OFFICE') {
       plannedLabel = 'office';
-    } else if (selectedLabel == 'HOME' || selectedLabel == 'PERSONAL') {
+    } else if (selectedLabel == 'PERSONAL') {
       plannedLabel = 'personal';
     } else {
       plannedLabel = 'office + personal';

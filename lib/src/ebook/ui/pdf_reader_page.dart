@@ -185,6 +185,7 @@ class _PdfReaderPageState extends State<PdfReaderPage> {
                           final initialPage = (_pagesCount * widget.initialProgress)
                               .round()
                               .clamp(1, _pagesCount);
+                          setState(() => _currentPage = initialPage);
                           controller.jumpToPage(initialPage);
                         },
                         onPageChanged: (page) {

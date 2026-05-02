@@ -102,7 +102,13 @@ class _SignInPageState extends State<SignInPage>
     });
 
     try {
-      final redirectTo = dotenv.env['PASSWORD_RESET_REDIRECT_TO'];
+      String? redirectTo;
+      try {
+        redirectTo = dotenv.env['PASSWORD_RESET_REDIRECT_TO'];
+      } catch (_) {
+        redirectTo = null;
+      }
+
       await Supabase.instance.client.auth.resetPasswordForEmail(
         email,
         redirectTo: (redirectTo == null || redirectTo.trim().isEmpty)
@@ -120,9 +126,11 @@ class _SignInPageState extends State<SignInPage>
     } on AuthException catch (e) {
       if (!mounted) return;
       setState(() => _error = e.message);
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Could not send reset email. Please try again.');
+      setState(() {
+        _error = 'Could not send reset email. ${e.toString()}';
+      });
     } finally {
       if (mounted) {
         setState(() => _sendingReset = false);
@@ -201,7 +209,7 @@ class _SignInPageState extends State<SignInPage>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'SPARROW',
+                                'WrapCo.',
                                 style: TextStyle(
                                   fontSize: 34,
                                   fontWeight: FontWeight.w900,

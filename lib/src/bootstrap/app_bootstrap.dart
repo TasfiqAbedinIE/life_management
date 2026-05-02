@@ -16,11 +16,16 @@ class AppBootstrap {
     WidgetsFlutterBinding.ensureInitialized();
     final prefs = await SharedPreferences.getInstance();
 
+    // Load environment values even when Supabase keys are already cached,
+    // because other app features read from dotenv later at runtime.
+    if (allowAssetLoad) {
+      await dotenv.load(fileName: '.env');
+    }
+
     var url = prefs.getString(_supabaseUrlKey);
     var anonKey = prefs.getString(_supabaseAnonKey);
 
     if ((url == null || anonKey == null) && allowAssetLoad) {
-      await dotenv.load(fileName: '.env');
       url = dotenv.env['SUPABASE_URL'];
       anonKey = dotenv.env['SUPABASE_ANON_KEY'];
 

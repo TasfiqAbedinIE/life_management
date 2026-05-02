@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Task Management App</string>
+	<string>WrapCo.</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -52,7 +52,7 @@
 			<string>supabase-auth</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>tasksparrow</string>
+				<string>wrapco</string>
 			</array>
 		</dict>
 	</array>

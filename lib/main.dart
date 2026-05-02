@@ -90,7 +90,7 @@ class _TaskAppState extends State<TaskApp> with WidgetsBindingObserver {
                   child: child!,
                 );
               },
-              title: 'Task Management App',
+              title: 'WrapCo.',
               theme: AppTheme.lightTheme(font),
               darkTheme: AppTheme.darkTheme(font),
               themeMode: mode,

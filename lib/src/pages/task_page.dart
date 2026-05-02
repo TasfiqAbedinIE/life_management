@@ -40,12 +40,20 @@ class _TaskPageState extends State<TaskPage> {
           .eq('start_date', dateStr);
 
       if (_selectedLabel != 'ALL') {
-        query = query.eq('label', _selectedLabel);
+        if (_selectedLabel == 'PERSONAL') {
+          query = query.inFilter('label', ['PERSONAL', 'HOME']);
+        } else {
+          query = query.eq('label', _selectedLabel);
+        }
       }
 
       final res = await query.order('created_at', ascending: false);
 
-      final tasksList = List<Map<String, dynamic>>.from(res as List);
+      final tasksList = List<Map<String, dynamic>>.from(
+        (res as List).map(
+          (task) => _normalizeTaskMap(Map<String, dynamic>.from(task as Map)),
+        ),
+      );
       setState(() {
         _tasks
           ..clear()
@@ -92,8 +100,9 @@ class _TaskPageState extends State<TaskPage> {
       ),
       builder: (ctx) => AddTaskSheet(
         onTaskSaved: (task) {
-          final taskDateStr = task['start_date'] as String?;
-          final taskLabel = (task['label'] ?? '').toString();
+          final normalizedTask = _normalizeTaskMap(task);
+          final taskDateStr = normalizedTask['start_date'] as String?;
+          final taskLabel = (normalizedTask['label'] ?? '').toString();
 
           final selectedDateStr = DateFormat(
             'yyyy-MM-dd',
@@ -105,10 +114,39 @@ class _TaskPageState extends State<TaskPage> {
 
           if (dateMatch && labelMatch) {
             setState(() {
-              _tasks.insert(0, task);
+              _tasks.insert(0, normalizedTask);
             });
           }
         },
+      ),
+    );
+  }
+
+  Map<String, dynamic> _normalizeTaskMap(Map<String, dynamic> task) {
+    final rawLabel = (task['label'] ?? '').toString().trim().toUpperCase();
+    if (rawLabel == 'HOME') {
+      task['label'] = 'PERSONAL';
+    }
+    return task;
+  }
+
+  InputDecoration _filterFieldDecoration(BuildContext context) {
+    return InputDecoration(
+      isDense: true,
+      filled: true,
+      fillColor: AppPalette.surfaceAlt(context),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(14),
+        borderSide: BorderSide.none,
       ),
     );
   }
@@ -171,10 +209,10 @@ class _TaskPageState extends State<TaskPage> {
       isScrollControlled: true,
       builder: (ctx) {
         return AddTaskSheet(
-          initialTask: task, // 👈 put the existing task here
+          initialTask: _normalizeTaskMap(Map<String, dynamic>.from(task)),
           onTaskSaved: (t) {
             setState(() {
-              _tasks[index] = t;
+              _tasks[index] = _normalizeTaskMap(t);
             });
           },
         );
@@ -183,7 +221,7 @@ class _TaskPageState extends State<TaskPage> {
 
     if (updatedTask != null) {
       setState(() {
-        _tasks[index] = updatedTask;
+        _tasks[index] = _normalizeTaskMap(updatedTask);
       });
     }
   }
@@ -191,6 +229,7 @@ class _TaskPageState extends State<TaskPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+
     return Scaffold(
       backgroundColor: AppPalette.background(context),
       appBar: AppBar(title: const Text('My Tasks')),
@@ -200,28 +239,25 @@ class _TaskPageState extends State<TaskPage> {
             // 🔹 Date filter row at the top
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-              child: Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: AppPalette.surfaceAlt(context),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppPalette.border(context)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: AppPalette.softShadow(context),
-                      blurRadius: 14,
-                      offset: const Offset(0, 8),
-                    ),
-                  ],
-                ),
-                child: Row(
+              child: Row(
                 children: [
                   Expanded(
-                    child: OutlinedButton.icon(
+                    child: FilledButton.tonalIcon(
                       onPressed: _pickFilterDate,
                       icon: const Icon(Icons.calendar_today_outlined, size: 18),
                       label: Text(
                         DateFormat('yyyy-MM-dd').format(_selectedDate),
+                      ),
+                      style: FilledButton.styleFrom(
+                        elevation: 0,
+                        backgroundColor: AppPalette.surfaceAlt(context),
+                        foregroundColor: Theme.of(
+                          context,
+                        ).colorScheme.onSurface,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                       ),
                     ),
                   ),
@@ -231,21 +267,13 @@ class _TaskPageState extends State<TaskPage> {
                     width: 150,
                     child: DropdownButtonFormField<String>(
                       value: _selectedLabel,
-                      decoration: const InputDecoration(
-                        isDense: true,
-                        contentPadding: EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        border: OutlineInputBorder(),
-                      ),
+                      decoration: _filterFieldDecoration(context),
                       items: const [
                         DropdownMenuItem(value: 'ALL', child: Text('All')),
                         DropdownMenuItem(
                           value: 'OFFICE',
                           child: Text('Office'),
                         ),
-                        DropdownMenuItem(value: 'HOME', child: Text('Home')),
                         DropdownMenuItem(
                           value: 'PERSONAL',
                           child: Text('Personal'),
@@ -259,9 +287,10 @@ class _TaskPageState extends State<TaskPage> {
                     ),
                   ),
                 ],
-                ),
               ),
             ),
+            // ],
+            // ),
 
             // 🔹 Main content (loader / empty / list)
             Padding(
@@ -355,7 +384,7 @@ class _TaskPageState extends State<TaskPage> {
                                   (t) => t['id'] == updatedId,
                                 );
                                 if (idx != -1) {
-                                  _tasks[idx] = updatedTask;
+                                  _tasks[idx] = _normalizeTaskMap(updatedTask);
                                 }
                               });
                             },
@@ -383,7 +412,7 @@ class _TaskPageState extends State<TaskPage> {
 
                               if (newDateOnly == selectedDateOnly) {
                                 setState(() {
-                                  _tasks.insert(0, newTask);
+                                  _tasks.insert(0, _normalizeTaskMap(newTask));
                                 });
                               }
                             },
@@ -423,10 +452,13 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
   final _titleCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _estimateCtrl = TextEditingController();
+  final FocusNode _titleFocusNode = FocusNode();
   String _label = 'OFFICE';
   DateTime _startDate = DateTime.now();
   DateTime _endDate = DateTime.now();
   bool _saving = false;
+  bool _loadingSuggestions = false;
+  List<String> _titleSuggestions = const [];
 
   final SupabaseClient _supabase = Supabase.instance.client;
 
@@ -435,6 +467,7 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
   @override
   void initState() {
     super.initState();
+    _loadTitleSuggestions();
 
     // 🔁 If editing, pre-fill with existing task values
     final t = widget.initialTask;
@@ -447,7 +480,8 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
         _estimateCtrl.text = est.toString();
       }
 
-      _label = (t['label'] ?? 'OFFICE').toString();
+      final rawLabel = (t['label'] ?? 'OFFICE').toString().toUpperCase();
+      _label = rawLabel == 'HOME' ? 'PERSONAL' : rawLabel;
 
       try {
         if (t['start_date'] != null) {
@@ -467,7 +501,60 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
     _titleCtrl.dispose();
     _descCtrl.dispose();
     _estimateCtrl.dispose();
+    _titleFocusNode.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadTitleSuggestions() async {
+    setState(() => _loadingSuggestions = true);
+    try {
+      final userId = _supabase.auth.currentUser!.id;
+      final res = await _supabase
+          .from('tasks')
+          .select('title')
+          .eq('user_id', userId)
+          .order('created_at', ascending: false)
+          .limit(80);
+
+      final seen = <String>{};
+      final suggestions = <String>[];
+      for (final row in res as List) {
+        final title = ((row as Map)['title'] ?? '').toString().trim();
+        if (title.isEmpty) continue;
+        final normalized = title.toLowerCase();
+        if (seen.add(normalized)) {
+          suggestions.add(title);
+        }
+      }
+
+      if (!mounted) return;
+      setState(() => _titleSuggestions = suggestions);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _titleSuggestions = const []);
+    } finally {
+      if (mounted) setState(() => _loadingSuggestions = false);
+    }
+  }
+
+  List<String> _matchingSuggestions(String query) {
+    final trimmed = query.trim().toLowerCase();
+    if (trimmed.isEmpty) return const [];
+
+    final startsWith = <String>[];
+    final contains = <String>[];
+
+    for (final suggestion in _titleSuggestions) {
+      final value = suggestion.toLowerCase();
+      if (value == trimmed) continue;
+      if (value.startsWith(trimmed)) {
+        startsWith.add(suggestion);
+      } else if (value.contains(trimmed)) {
+        contains.add(suggestion);
+      }
+    }
+
+    return [...startsWith, ...contains].take(6).toList();
   }
 
   Future<void> _pickDate({required bool isStart}) async {
@@ -605,15 +692,88 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
               key: _formKey,
               child: Column(
                 children: [
-                  TextFormField(
-                    controller: _titleCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Task title',
-                      prefixIcon: Icon(Icons.title),
-                    ),
-                    validator: (v) => (v == null || v.trim().isEmpty)
-                        ? 'Enter a title'
-                        : null,
+                  RawAutocomplete<String>(
+                    textEditingController: _titleCtrl,
+                    focusNode: _titleFocusNode,
+                    optionsBuilder: (value) {
+                      return _matchingSuggestions(value.text);
+                    },
+                    onSelected: (selection) {
+                      _titleCtrl
+                        ..text = selection
+                        ..selection = TextSelection.collapsed(
+                          offset: selection.length,
+                        );
+                    },
+                    fieldViewBuilder:
+                        (context, controller, focusNode, onFieldSubmitted) {
+                          return TextFormField(
+                            controller: controller,
+                            focusNode: focusNode,
+                            decoration: InputDecoration(
+                              labelText: 'Task title',
+                              prefixIcon: const Icon(Icons.title),
+                              suffixIcon: _loadingSuggestions
+                                  ? const Padding(
+                                      padding: EdgeInsets.all(12),
+                                      child: SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    )
+                                  : (_titleCtrl.text.trim().isNotEmpty
+                                        ? const Icon(Icons.auto_awesome_rounded)
+                                        : null),
+                            ),
+                            validator: (v) => (v == null || v.trim().isEmpty)
+                                ? 'Enter a title'
+                                : null,
+                            onFieldSubmitted: (_) => onFieldSubmitted(),
+                          );
+                        },
+                    optionsViewBuilder: (context, onSelected, options) {
+                      final items = options.toList();
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          color: AppPalette.surface(context),
+                          elevation: 8,
+                          borderRadius: BorderRadius.circular(16),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 520),
+                            child: SizedBox(
+                              width: MediaQuery.of(context).size.width - 32,
+                              child: ListView.separated(
+                                padding: const EdgeInsets.symmetric(
+                                  vertical: 8,
+                                ),
+                                shrinkWrap: true,
+                                itemCount: items.length,
+                                separatorBuilder: (_, _) => Divider(
+                                  height: 1,
+                                  color: AppPalette.border(context),
+                                ),
+                                itemBuilder: (context, index) {
+                                  final suggestion = items[index];
+                                  return ListTile(
+                                    dense: true,
+                                    leading: const Icon(
+                                      Icons.history_rounded,
+                                      size: 18,
+                                    ),
+                                    title: Text(suggestion),
+                                    onTap: () => onSelected(suggestion),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 10),
                   TextFormField(
@@ -633,7 +793,6 @@ class _AddTaskSheetState extends State<AddTaskSheet> {
                     ),
                     items: const [
                       DropdownMenuItem(value: 'OFFICE', child: Text('OFFICE')),
-                      DropdownMenuItem(value: 'HOME', child: Text('HOME')),
                       DropdownMenuItem(
                         value: 'PERSONAL',
                         child: Text('PERSONAL'),
@@ -1138,9 +1297,6 @@ class _TaskCardState extends State<TaskCard>
     switch (label) {
       case 'OFFICE':
         labelColor = Colors.indigo;
-        break;
-      case 'HOME':
-        labelColor = Colors.green;
         break;
       case 'PERSONAL':
         labelColor = Colors.deepOrange;

@@ -50,6 +50,7 @@ dependencies:
   flutter_epub_viewer: ^1.2.8
   shared_preferences: ^2.5.3
   home_widget: ^0.8.1
+  flutter_svg: ^2.2.0
 
 dev_dependencies:
   flutter_test:
@@ -88,6 +89,7 @@ flutter:
     - assets/icon/habits.png
     - assets/icon/notes_icon.png
     - assets/icon/reader_icon.png
+    - assets/generated_icons/manual_pack/
     
   #   - images/a_dot_burr.jpeg
   #   - images/a_dot_ham.jpeg

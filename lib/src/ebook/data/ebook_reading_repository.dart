@@ -6,14 +6,21 @@ class EbookReadingStats {
   final Map<String, int> totalSecondsByBook;
   final int currentWeekSeconds;
   final int previousWeekSeconds;
+  final Map<DateTime, int> currentWeekDailySeconds;
+  final int currentWeekBooksRead;
+  final int readingStreakDays;
 
   const EbookReadingStats({
     required this.totalSecondsByBook,
     required this.currentWeekSeconds,
     required this.previousWeekSeconds,
+    this.currentWeekDailySeconds = const {},
+    this.currentWeekBooksRead = 0,
+    this.readingStreakDays = 0,
   });
 
-  int get totalSecondsAllBooks => totalSecondsByBook.values.fold(0, (a, b) => a + b);
+  int get totalSecondsAllBooks =>
+      totalSecondsByBook.values.fold(0, (a, b) => a + b);
 }
 
 class EbookReadingRepository {
@@ -39,7 +46,9 @@ class EbookReadingRepository {
         cursor = cursor.subtract(const Duration(seconds: 1));
         continue;
       }
-      final chunk = remaining <= secondsInThisDay ? remaining : secondsInThisDay;
+      final chunk = remaining <= secondsInThisDay
+          ? remaining
+          : secondsInThisDay;
       final dayKey = _dayKey(cursor);
 
       await db.rawInsert(
@@ -70,7 +79,8 @@ class EbookReadingRepository {
     for (final row in totalRows) {
       final ebookId = (row['ebook_id'] ?? '').toString();
       if (ebookId.isEmpty) continue;
-      totalSecondsByBook[ebookId] = (row['total_seconds'] as num?)?.toInt() ?? 0;
+      totalSecondsByBook[ebookId] =
+          (row['total_seconds'] as num?)?.toInt() ?? 0;
     }
 
     final now = DateTime.now();
@@ -90,10 +100,27 @@ class EbookReadingRepository {
       end: currentWeekStart,
     );
 
+    final currentWeekDailySeconds = await _dailySecondsBetween(
+      db,
+      start: currentWeekStart,
+      end: nextWeekStart,
+    );
+
+    final currentWeekBooksRead = await _distinctBooksBetween(
+      db,
+      start: currentWeekStart,
+      end: nextWeekStart,
+    );
+
+    final readingStreakDays = await _readingStreakDays(db, DateTime.now());
+
     return EbookReadingStats(
       totalSecondsByBook: totalSecondsByBook,
       currentWeekSeconds: currentWeekSeconds,
       previousWeekSeconds: previousWeekSeconds,
+      currentWeekDailySeconds: currentWeekDailySeconds,
+      currentWeekBooksRead: currentWeekBooksRead,
+      readingStreakDays: readingStreakDays,
     );
   }
 
@@ -115,9 +142,81 @@ class EbookReadingRepository {
     return (rows.first['total_seconds'] as num?)?.toInt() ?? 0;
   }
 
+  Future<Map<DateTime, int>> _dailySecondsBetween(
+    Database db, {
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final rows = await db.rawQuery(
+      '''
+      SELECT day_key, COALESCE(SUM(seconds), 0) AS total_seconds
+      FROM ebook_reading_daily
+      WHERE day_key >= ? AND day_key < ?
+      GROUP BY day_key
+      ''',
+      [_dayKey(start), _dayKey(end)],
+    );
+
+    final dailySeconds = <DateTime, int>{};
+    for (final row in rows) {
+      final day = _parseDayKey((row['day_key'] ?? '').toString());
+      if (day == null) continue;
+      dailySeconds[day] = (row['total_seconds'] as num?)?.toInt() ?? 0;
+    }
+    return dailySeconds;
+  }
+
+  Future<int> _distinctBooksBetween(
+    Database db, {
+    required DateTime start,
+    required DateTime end,
+  }) async {
+    final rows = await db.rawQuery(
+      '''
+      SELECT COUNT(DISTINCT ebook_id) AS book_count
+      FROM ebook_reading_daily
+      WHERE day_key >= ? AND day_key < ? AND seconds > 0
+      ''',
+      [_dayKey(start), _dayKey(end)],
+    );
+
+    if (rows.isEmpty) return 0;
+    return (rows.first['book_count'] as num?)?.toInt() ?? 0;
+  }
+
+  Future<int> _readingStreakDays(Database db, DateTime throughDate) async {
+    final rows = await db.rawQuery(
+      '''
+      SELECT day_key, COALESCE(SUM(seconds), 0) AS total_seconds
+      FROM ebook_reading_daily
+      WHERE day_key <= ?
+      GROUP BY day_key
+      HAVING total_seconds > 0
+      ''',
+      [_dayKey(throughDate)],
+    );
+
+    final activeDays = <String>{};
+    for (final row in rows) {
+      activeDays.add((row['day_key'] ?? '').toString());
+    }
+
+    var cursor = DateTime(throughDate.year, throughDate.month, throughDate.day);
+    var streak = 0;
+    while (activeDays.contains(_dayKey(cursor))) {
+      streak += 1;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    return streak;
+  }
+
   DateTime _startOfWeek(DateTime date) {
     final offset = date.weekday - DateTime.monday;
-    return DateTime(date.year, date.month, date.day).subtract(Duration(days: offset));
+    return DateTime(
+      date.year,
+      date.month,
+      date.day,
+    ).subtract(Duration(days: offset));
   }
 
   String _dayKey(DateTime date) {
@@ -125,5 +224,15 @@ class EbookReadingRepository {
     final m = date.month.toString().padLeft(2, '0');
     final d = date.day.toString().padLeft(2, '0');
     return '$y-$m-$d';
+  }
+
+  DateTime? _parseDayKey(String value) {
+    final parts = value.split('-');
+    if (parts.length != 3) return null;
+    final year = int.tryParse(parts[0]);
+    final month = int.tryParse(parts[1]);
+    final day = int.tryParse(parts[2]);
+    if (year == null || month == null || day == null) return null;
+    return DateTime(year, month, day);
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'sign_in_page.dart';
 import 'task_page.dart';
@@ -10,6 +11,7 @@ import '../coupled/coupled_request_page.dart';
 import '../habits/presentation/habits_page.dart';
 import '../habits/widget/habit_widget_service.dart';
 import '../notes/pages/notes_list_page.dart';
+import '../ebook/data/ebook_reading_repository.dart';
 import '../ebook/ui/ebook_library_page.dart';
 import '../budgeting/presentation/budgeting_page.dart';
 import '../project_management/presentation/project_management_page.dart';
@@ -23,6 +25,8 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
+  static const String _generatedIconBase = 'assets/generated_icons/manual_pack';
+
   late Future<_EfficiencySummary> _efficiencyFuture;
 
   late DateTime _now;
@@ -530,6 +534,18 @@ class _HomePageState extends State<HomePage> {
                       },
                     ),
 
+                    const SizedBox(height: 12),
+
+                    _ReaderDashboardSection(
+                      onOpenReader: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const EbookLibraryPage(),
+                          ),
+                        );
+                      },
+                    ),
+
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -577,8 +593,8 @@ class _HomePageState extends State<HomePage> {
           },
         ),
         _MinimalActionButton(
-          icon: Image.asset(
-            "assets/icon/coupled_icon.png",
+          icon: SvgPicture.asset(
+            "$_generatedIconBase/coupled.svg",
             fit: BoxFit.contain,
           ),
           label: "Coupled",
@@ -589,7 +605,10 @@ class _HomePageState extends State<HomePage> {
           },
         ),
         _MinimalActionButton(
-          icon: Image.asset("assets/icon/habits.png", fit: BoxFit.contain),
+          icon: SvgPicture.asset(
+            "$_generatedIconBase/habits.svg",
+            fit: BoxFit.contain,
+          ),
           label: "Habits",
           onTap: () {
             Navigator.of(
@@ -607,10 +626,9 @@ class _HomePageState extends State<HomePage> {
           },
         ),
         _MinimalActionButton(
-          icon: Icon(
-            Icons.account_balance_wallet_rounded,
-            color: Theme.of(context).colorScheme.primary,
-            size: 24,
+          icon: SvgPicture.asset(
+            "$_generatedIconBase/budget.svg",
+            fit: BoxFit.contain,
           ),
           label: "Budget",
           onTap: () {
@@ -620,7 +638,10 @@ class _HomePageState extends State<HomePage> {
           },
         ),
         _MinimalActionButton(
-          icon: Image.asset("assets/icon/reader_icon.png", fit: BoxFit.contain),
+          icon: SvgPicture.asset(
+            "$_generatedIconBase/reader.svg",
+            fit: BoxFit.contain,
+          ),
           label: "Reader",
           onTap: () {
             Navigator.of(
@@ -629,10 +650,9 @@ class _HomePageState extends State<HomePage> {
           },
         ),
         _MinimalActionButton(
-          icon: Icon(
-            Icons.dashboard_customize_rounded,
-            color: Theme.of(context).colorScheme.primary,
-            size: 24,
+          icon: SvgPicture.asset(
+            "$_generatedIconBase/projects.svg",
+            fit: BoxFit.contain,
           ),
           label: "Projects",
           onTap: () {
@@ -642,8 +662,8 @@ class _HomePageState extends State<HomePage> {
           },
         ),
         _MinimalActionButton(
-          icon: Image.asset(
-            "assets/icon/setting_icon.png",
+          icon: SvgPicture.asset(
+            "$_generatedIconBase/settings.svg",
             fit: BoxFit.contain,
           ),
           label: "Setting",
@@ -1320,6 +1340,572 @@ class _MinimalActionButton extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _ReaderDashboardSection extends StatefulWidget {
+  const _ReaderDashboardSection({required this.onOpenReader});
+
+  final VoidCallback onOpenReader;
+
+  @override
+  State<_ReaderDashboardSection> createState() =>
+      _ReaderDashboardSectionState();
+}
+
+class _ReaderDashboardSectionState extends State<_ReaderDashboardSection> {
+  final EbookReadingRepository _readingRepository = EbookReadingRepository();
+  late Future<EbookReadingStats> _future;
+
+  static const int _weeklyGoalSeconds = 6 * 60 * 60;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _readingRepository.fetchStats();
+  }
+
+  Future<void> _refresh() async {
+    setState(() {
+      _future = _readingRepository.fetchStats();
+    });
+  }
+
+  String _formatReadTime(int seconds) {
+    final duration = Duration(seconds: seconds);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+
+    if (hours <= 0) return '${minutes}m';
+    if (minutes <= 0) return '${hours}h';
+    return '${hours}h ${minutes}m';
+  }
+
+  List<DateTime> _currentWeekDays() {
+    final now = DateTime.now();
+    final start = DateTime(
+      now.year,
+      now.month,
+      now.day,
+    ).subtract(Duration(days: now.weekday - DateTime.monday));
+    return List.generate(7, (index) => start.add(Duration(days: index)));
+  }
+
+  Widget _buildError(Object error) {
+    final isDark = AppPalette.isDark(context);
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF361920) : Colors.red[50],
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: isDark ? const Color(0xFF7F3340) : Colors.red[100]!,
+        ),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline_rounded, color: Colors.red),
+          const SizedBox(width: 12),
+          Expanded(child: Text(error.toString())),
+          TextButton(onPressed: _refresh, child: const Text('Retry')),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLoading() {
+    return Container(
+      height: 250,
+      decoration: BoxDecoration(
+        color: AppPalette.isDark(context)
+            ? const Color(0xFF172338)
+            : Colors.grey[200],
+        borderRadius: BorderRadius.circular(16),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<EbookReadingStats>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildLoading();
+        }
+        if (snapshot.hasError) {
+          return _buildError(snapshot.error!);
+        }
+
+        final stats =
+            snapshot.data ??
+            const EbookReadingStats(
+              totalSecondsByBook: {},
+              currentWeekSeconds: 0,
+              previousWeekSeconds: 0,
+            );
+        final weekDays = _currentWeekDays();
+        final dailySeconds = {
+          for (final day in weekDays)
+            day: stats.currentWeekDailySeconds[day] ?? 0,
+        };
+        final goalProgress = (stats.currentWeekSeconds / _weeklyGoalSeconds)
+            .clamp(0.0, 1.0);
+        final maxDailySeconds = math.max(
+          60 * 60,
+          dailySeconds.values.fold<int>(0, math.max),
+        );
+
+        return _ReaderPerformanceCard(
+          stats: stats,
+          dailySeconds: dailySeconds,
+          goalProgress: goalProgress,
+          maxDailySeconds: maxDailySeconds,
+          weeklyGoalText:
+              '${(goalProgress * 100).clamp(0, 100).toStringAsFixed(0)}% of weekly goal',
+          formatReadTime: _formatReadTime,
+          onTap: widget.onOpenReader,
+        );
+      },
+    );
+  }
+}
+
+class _ReaderPerformanceCard extends StatelessWidget {
+  final EbookReadingStats stats;
+  final Map<DateTime, int> dailySeconds;
+  final double goalProgress;
+  final int maxDailySeconds;
+  final String weeklyGoalText;
+  final String Function(int seconds) formatReadTime;
+  final VoidCallback onTap;
+
+  const _ReaderPerformanceCard({
+    required this.stats,
+    required this.dailySeconds,
+    required this.goalProgress,
+    required this.maxDailySeconds,
+    required this.weeklyGoalText,
+    required this.formatReadTime,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = AppPalette.isDark(context);
+    final textColor = Theme.of(context).colorScheme.onSurface;
+    final accent = isDark ? const Color(0xFF8B7BFF) : const Color(0xFF6F62FF);
+    final softAccent = isDark
+        ? const Color(0xFF6B5FE8)
+        : const Color(0xFF8A7CFF);
+    final cardColor = isDark ? const Color(0xFF171D26) : Colors.white;
+    final borderColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : const Color(0xFFE1E4EC);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor),
+          boxShadow: [
+            BoxShadow(
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.28)
+                  : Colors.black.withValues(alpha: 0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'Weekly Reading Performance',
+                    style: TextStyle(
+                      color: textColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: onTap,
+                  style: TextButton.styleFrom(
+                    foregroundColor: accent,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: const Icon(Icons.menu_book_rounded, size: 16),
+                  label: const Text(
+                    'Open Reader',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                SizedBox(
+                  width: 128,
+                  child: Column(
+                    children: [
+                      SizedBox(
+                        height: 118,
+                        width: 118,
+                        child: _ReadingGoalRing(
+                          progress: goalProgress,
+                          accent: accent,
+                          softAccent: softAccent,
+                          trackColor: isDark
+                              ? const Color(0xFF3A405A)
+                              : const Color(0xFFE9E6FF),
+                          center: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                formatReadTime(stats.currentWeekSeconds),
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.w900,
+                                  height: 1.0,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                'Time Read',
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        weeklyGoalText,
+                        style: TextStyle(
+                          color: accent,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: SizedBox(
+                    height: 150,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: dailySeconds.entries.map((entry) {
+                        return _ReadingDayBar(
+                          day: entry.key,
+                          seconds: entry.value,
+                          maxSeconds: maxDailySeconds,
+                          accent: accent,
+                          softAccent: softAccent,
+                          textColor: textColor,
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+            Divider(
+              height: 1,
+              color: isDark
+                  ? Colors.white.withValues(alpha: 0.08)
+                  : const Color(0xFFE6E9F1),
+            ),
+            const SizedBox(height: 16),
+            IntrinsicHeight(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _ReaderMetric(
+                      icon: Icons.menu_book_rounded,
+                      label: 'Books Read',
+                      value: stats.currentWeekBooksRead.toString(),
+                      unit: 'Books',
+                      iconColor: isDark
+                          ? const Color(0xFF9A84FF)
+                          : const Color(0xFF6F62FF),
+                    ),
+                  ),
+                  VerticalDivider(
+                    width: 24,
+                    color: isDark
+                        ? Colors.white.withValues(alpha: 0.1)
+                        : const Color(0xFFDDE2EC),
+                  ),
+                  Expanded(
+                    child: _ReaderMetric(
+                      icon: Icons.local_fire_department_rounded,
+                      label: 'Reading Streak',
+                      value: stats.readingStreakDays.toString(),
+                      unit: 'Days',
+                      iconColor: const Color(0xFFFF8A2A),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ReadingGoalRing extends StatelessWidget {
+  final double progress;
+  final Color accent;
+  final Color softAccent;
+  final Color trackColor;
+  final Widget center;
+
+  const _ReadingGoalRing({
+    required this.progress,
+    required this.accent,
+    required this.softAccent,
+    required this.trackColor,
+    required this.center,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return CustomPaint(
+      painter: _ReadingGoalRingPainter(
+        progress: progress,
+        accent: accent,
+        softAccent: softAccent,
+        trackColor: trackColor,
+      ),
+      child: Center(child: center),
+    );
+  }
+}
+
+class _ReadingGoalRingPainter extends CustomPainter {
+  final double progress;
+  final Color accent;
+  final Color softAccent;
+  final Color trackColor;
+
+  const _ReadingGoalRingPainter({
+    required this.progress,
+    required this.accent,
+    required this.softAccent,
+    required this.trackColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strokeWidth = 8.0;
+    final rect = Offset.zero & size;
+    final ringRect = rect.deflate(strokeWidth / 2);
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final progressPaint = Paint()
+      ..shader = SweepGradient(
+        colors: [softAccent, accent, softAccent],
+        stops: const [0.0, 0.58, 1.0],
+        startAngle: -math.pi / 2,
+        endAngle: math.pi * 1.5,
+      ).createShader(ringRect)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(ringRect, 0, math.pi * 2, false, trackPaint);
+    canvas.drawArc(
+      ringRect,
+      -math.pi / 2,
+      math.pi * 2 * progress.clamp(0.0, 1.0),
+      false,
+      progressPaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ReadingGoalRingPainter oldDelegate) {
+    return progress != oldDelegate.progress ||
+        accent != oldDelegate.accent ||
+        softAccent != oldDelegate.softAccent ||
+        trackColor != oldDelegate.trackColor;
+  }
+}
+
+class _ReadingDayBar extends StatelessWidget {
+  final DateTime day;
+  final int seconds;
+  final int maxSeconds;
+  final Color accent;
+  final Color softAccent;
+  final Color textColor;
+
+  const _ReadingDayBar({
+    required this.day,
+    required this.seconds,
+    required this.maxSeconds,
+    required this.accent,
+    required this.softAccent,
+    required this.textColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final ratio = maxSeconds <= 0
+        ? 0.0
+        : (seconds / maxSeconds).clamp(0.0, 1.0);
+    final height = 22.0 + (84.0 * ratio);
+
+    return Expanded(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          Text(
+            seconds == 0 ? '0m' : _compactDuration(seconds),
+            maxLines: 1,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 7),
+          Container(
+            width: 16,
+            height: height,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(5),
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [softAccent, accent.withValues(alpha: 0.72)],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: accent.withValues(alpha: 0.26),
+                  blurRadius: 12,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 10),
+          Text(
+            labels[day.weekday - 1],
+            maxLines: 1,
+            style: TextStyle(
+              color: textColor.withValues(alpha: 0.75),
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _compactDuration(int seconds) {
+    final duration = Duration(seconds: seconds);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    if (hours <= 0) return '${math.max(minutes, 1)}m';
+    if (minutes <= 0) return '${hours}h';
+    return '${hours}h ${minutes}m';
+  }
+}
+
+class _ReaderMetric extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final String value;
+  final String unit;
+  final Color iconColor;
+
+  const _ReaderMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.unit,
+    required this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final textColor = Theme.of(context).colorScheme.onSurface;
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 17, color: iconColor),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        Text(
+          value,
+          style: TextStyle(
+            color: textColor,
+            fontSize: 24,
+            height: 1,
+            fontWeight: FontWeight.w900,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          unit,
+          style: TextStyle(
+            color: textColor.withValues(alpha: 0.72),
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }

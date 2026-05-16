@@ -21,6 +21,19 @@ class _TaskPageState extends State<TaskPage> {
   DateTime _selectedDate = DateTime.now();
   String _selectedLabel = 'ALL';
 
+  int get _completedTaskCount =>
+      _tasks.where((task) => (task['status'] ?? '') == 'completed').length;
+
+  int get _taskCompletionPercentage {
+    if (_tasks.isEmpty) return 0;
+    return ((_completedTaskCount / _tasks.length) * 100).round();
+  }
+
+  double get _taskCompletionProgress {
+    if (_tasks.isEmpty) return 0;
+    return _completedTaskCount / _tasks.length;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -151,6 +164,67 @@ class _TaskPageState extends State<TaskPage> {
     );
   }
 
+  Widget _buildCompletionBanner(BuildContext context) {
+    final theme = Theme.of(context);
+    final completed = _completedTaskCount;
+    final total = _tasks.length;
+    final percent = _taskCompletionPercentage;
+    final progress = _taskCompletionProgress;
+    final isDark = AppPalette.isDark(context);
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 10),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? const [Color(0xFF17324F), Color(0xFF244E79), Color(0xFF2B7FFF)]
+              : const [Color(0xFF91D8FF), Color(0xFF5FB8FF), Color(0xFF377DFF)],
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF377DFF).withOpacity(isDark ? 0.24 : 0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$percent%',
+                  style: theme.textTheme.headlineMedium?.copyWith(
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                    height: 0.95,
+                    letterSpacing: -0.8,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  '$completed/$total task${total == 1 ? '' : 's'} completed',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.white.withOpacity(0.92),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          _CompletionDonut(progress: progress, accentColor: Colors.white),
+        ],
+      ),
+    );
+  }
+
   Widget _buildEditBackground() {
     return Container(
       color: Colors.blueGrey.withOpacity(0.2),
@@ -237,8 +311,9 @@ class _TaskPageState extends State<TaskPage> {
         child: Column(
           children: [
             // 🔹 Date filter row at the top
+            _buildCompletionBanner(context),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 4),
               child: Row(
                 children: [
                   Expanded(
@@ -1323,7 +1398,7 @@ class _TaskCardState extends State<TaskCard>
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(16),
         color: AppPalette.surfaceAlt(context),
@@ -1349,14 +1424,14 @@ class _TaskCardState extends State<TaskCard>
                   title,
                   style: TextStyle(
                     fontWeight: FontWeight.w700,
-                    fontSize: 16,
+                    fontSize: 15,
                     color: theme.colorScheme.onSurface,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 3),
           // Row 2: description if any
           if (description.trim().isNotEmpty) ...[
             Text(
@@ -1368,13 +1443,13 @@ class _TaskCardState extends State<TaskCard>
                 fontSize: 13,
               ),
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 5),
           ],
           // Row 3: label + estimated time
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   color: labelColor.withOpacity(0.08),
@@ -1399,7 +1474,7 @@ class _TaskCardState extends State<TaskCard>
                 ),
             ],
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 4),
           // Row 4: spent time + all buttons in a single row
           Row(
             children: [
@@ -1414,8 +1489,7 @@ class _TaskCardState extends State<TaskCard>
                       style: TextStyle(
                         fontSize: 12,
                         color: AppPalette.mutedText(context),
-                        decoration:
-                            TextDecoration.none, // optional hint it's tappable
+                        decoration: TextDecoration.none,
                       ),
                     ),
                   ),
@@ -1424,6 +1498,9 @@ class _TaskCardState extends State<TaskCard>
               IconButton(
                 tooltip: _isRunning ? 'Pause' : 'Start',
                 onPressed: status == 'completed' ? null : _togglePlayPause,
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                padding: EdgeInsets.zero,
                 icon: Icon(
                   _isRunning
                       ? Icons.pause_circle_filled
@@ -1436,17 +1513,67 @@ class _TaskCardState extends State<TaskCard>
               IconButton(
                 tooltip: 'Complete',
                 onPressed: status == 'completed' ? null : _completeTask,
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                padding: EdgeInsets.zero,
                 icon: const Icon(Icons.check_circle, color: Colors.blueGrey),
               ),
               IconButton(
                 tooltip: 'Copy to next day',
                 onPressed: _copyToDate,
+                visualDensity: VisualDensity.compact,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                padding: EdgeInsets.zero,
                 icon: const Icon(
                   Icons.copy_all_outlined,
                   color: Colors.deepPurple,
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompletionDonut extends StatelessWidget {
+  const _CompletionDonut({
+    required this.progress,
+    required this.accentColor,
+  });
+
+  final double progress;
+  final Color accentColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final normalized = progress.clamp(0.0, 1.0).toDouble();
+
+    return SizedBox(
+      width: 66,
+      height: 66,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          SizedBox(
+            width: 66,
+            height: 66,
+            child: CircularProgressIndicator(
+              value: normalized,
+              strokeWidth: 7,
+              strokeCap: StrokeCap.round,
+              backgroundColor: accentColor.withOpacity(0.22),
+              valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+            ),
+          ),
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.18),
+            ),
           ),
         ],
       ),

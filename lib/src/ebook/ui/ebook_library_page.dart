@@ -61,9 +61,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
           if (signedUrl != null && signedUrl.isNotEmpty) {
             coverUrls[ebook.id] = signedUrl;
           }
-        } catch (_) {
-          // Ignore broken/missing cover paths and fall back to icon.
-        }
+        } catch (_) {}
       }),
     );
 
@@ -109,10 +107,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
               children: [
                 Text(
                   ebook.title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
+                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                 ),
                 const SizedBox(height: 4),
                 Text(ebook.author),
@@ -120,7 +115,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                   const SizedBox(height: 8),
                   Text(
                     ebook.description!.trim(),
-                    maxLines: 4,
+                    maxLines: 5,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       color: AppPalette.isDark(context)
@@ -136,7 +131,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                     spacing: 6,
                     runSpacing: 6,
                     children: ebook.tags
-                        .map((tag) => _tinyBadge(tag, const Color(0xFF2563EB)))
+                        .map((tag) => _tinyBadge(tag, const Color(0xFF6366F1)))
                         .toList(),
                   ),
                 ],
@@ -145,9 +140,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     leading: const Icon(Icons.play_arrow_rounded),
-                    title: Text(
-                      'Continue reading (${(progress * 100).toStringAsFixed(0)}%)',
-                    ),
+                    title: Text('Continue reading (${(progress * 100).toStringAsFixed(0)}%)'),
                     onTap: () {
                       Navigator.pop(context);
                       _openReader(ebook: ebook, state: state);
@@ -156,9 +149,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                 ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Icon(
-                    hasLocalCopy
-                        ? Icons.offline_pin_outlined
-                        : Icons.chrome_reader_mode_outlined,
+                    hasLocalCopy ? Icons.offline_pin_outlined : Icons.chrome_reader_mode_outlined,
                   ),
                   title: Text(hasLocalCopy ? 'Read offline' : 'Read now'),
                   onTap: () {
@@ -179,8 +170,8 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                     downloading
                         ? 'Downloading... $downloadPct%'
                         : hasLocalCopy
-                        ? 'Re-download'
-                        : 'Download for offline',
+                            ? 'Re-download'
+                            : 'Download for offline',
                   ),
                   onTap: downloading
                       ? null
@@ -271,9 +262,9 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Download failed: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Download failed: $e')),
+      );
     } finally {
       if (mounted) setState(() => _downloadProgress.remove(ebook.id));
     }
@@ -307,9 +298,9 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
     );
 
     if (!mounted) return;
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Offline file removed.')));
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Offline file removed.')),
+    );
   }
 
   void _patchLocalState(String ebookId, EbookUserState newState) {
@@ -422,9 +413,9 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Failed to open ebook: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to open ebook: $e')),
+      );
     } finally {
       if (pushedReader) {
         await _recordReadingSession(ebookId: ebook.id, startAt: readingStart);
@@ -462,18 +453,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
     );
   }
 
-  List<String> _availableTags(List<Ebook> ebooks) {
-    final tags = <String>{};
-    for (final ebook in ebooks) {
-      tags.addAll(ebook.tags);
-    }
-
-    final sorted = tags.toList()
-      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-    return ['All', ...sorted];
-  }
-
-  List<Ebook> _visibleEbooks(_EbookLibraryData data) {
+  List<Ebook> _filteredBooks(_EbookLibraryData data) {
     final query = _searchCtrl.text.trim().toLowerCase();
     return data.ebooks.where((ebook) {
       final matchesQuery =
@@ -508,37 +488,52 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
     return books;
   }
 
-  _WeekComparison _comparison(int currentWeekSeconds, int previousWeekSeconds) {
-    if (previousWeekSeconds <= 0) {
-      if (currentWeekSeconds <= 0) {
-        return const _WeekComparison(
-          message: 'Start reading to build your weekly insight.',
-          isPositive: true,
-        );
+  List<_GenreItem> _genreItems(_EbookLibraryData data) {
+    final tags = <String>{};
+    for (final ebook in data.ebooks) {
+      for (final tag in ebook.tags) {
+        tags.add(tag);
       }
-
-      return const _WeekComparison(
-        message: 'Great start this week. Keep your momentum going.',
-        isPositive: true,
-      );
     }
 
-    final change =
-        ((currentWeekSeconds - previousWeekSeconds) / previousWeekSeconds) *
-        100;
-    final rounded = change.abs().round();
+    final sortedTags = tags.toList()
+      ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    final result = <_GenreItem>[];
 
-    if (change >= 0) {
-      return _WeekComparison(
-        message: 'You read $rounded% more than previous week.',
-        isPositive: true,
-      );
+    for (final tag in sortedTags.take(8)) {
+      result.add(_genreStyle(tag));
     }
 
-    return _WeekComparison(
-      message: 'You read $rounded% less than previous week.',
-      isPositive: false,
-    );
+    if (result.isEmpty) {
+      return const [
+        _GenreItem('Fantasy', Color(0xFFEDEBFF)),
+        _GenreItem('Romance', Color(0xFFFFEEF3)),
+        _GenreItem('Mystery', Color(0xFFFFF6DF)),
+        _GenreItem('Sci-Fi', Color(0xFFE5F8FB)),
+      ];
+    }
+
+    return result;
+  }
+
+  _GenreItem _genreStyle(String tag) {
+    final key = tag.toLowerCase();
+    if (key.contains('fantasy')) {
+      return const _GenreItem('Fantasy', Color(0xFFEDEBFF));
+    }
+    if (key.contains('romance')) {
+      return const _GenreItem('Romance', Color(0xFFFFEEF3));
+    }
+    if (key.contains('mystery')) {
+      return const _GenreItem('Mystery', Color(0xFFFFF6DF));
+    }
+    if (key.contains('sci')) {
+      return const _GenreItem('Sci-Fi', Color(0xFFE5F8FB));
+    }
+    if (key.contains('history')) {
+      return const _GenreItem('History', Color(0xFFFFF5E3));
+    }
+    return _GenreItem(tag, const Color(0xFFEEF2FF));
   }
 
   String _formatDuration(int totalSeconds) {
@@ -551,217 +546,302 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
     return '${totalSeconds}s';
   }
 
-  Widget _analyticsCard(_EbookLibraryData data) {
-    final comparison = _comparison(
-      data.readingStats.currentWeekSeconds,
-      data.readingStats.previousWeekSeconds,
-    );
-    final totalTime = _formatDuration(data.readingStats.totalSecondsAllBooks);
+  String _estimatedRemainingText(Ebook ebook, _EbookLibraryData data) {
+    final progress = data.userStates[ebook.id]?.progress ?? 0.0;
+    final spent = data.readingStats.totalSecondsByBook[ebook.id] ?? 0;
 
-    final tone = comparison.isPositive
-        ? const Color(0xFF16A34A)
-        : const Color(0xFFDC2626);
+    if (progress <= 0 || progress >= 1 || spent <= 0) {
+      return 'Keep reading';
+    }
 
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 14),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1D4ED8), Color(0xFF2563EB)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Reading Analysis',
-            style: TextStyle(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-              fontSize: 17,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Total time spent: $totalTime',
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  comparison.isPositive
-                      ? Icons.trending_up_rounded
-                      : Icons.trending_down_rounded,
-                  color: tone,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    comparison.message,
-                    style: TextStyle(
-                      color: tone,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
+    final estimatedTotal = spent / progress;
+    final remaining = (estimatedTotal - spent).round();
+    if (remaining <= 0) return 'Almost done';
+
+    return '${_formatDuration(remaining)} left';
   }
 
-  Widget _tagChips(List<String> tags) {
-    return SizedBox(
-      height: 42,
-      child: ListView.separated(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        scrollDirection: Axis.horizontal,
-        itemBuilder: (context, index) {
-          final tag = tags[index];
-          return ChoiceChip(
-            label: Text(tag),
-            selected: _selectedTag == tag,
-            onSelected: (_) => setState(() => _selectedTag = tag),
-          );
-        },
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemCount: tags.length,
-      ),
-    );
-  }
-
-  Widget _sectionTitle(String text) {
+  Widget _sectionHeader(String title) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 6),
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
       child: Text(
-        text,
+        title,
         style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
       ),
     );
   }
 
-  Widget _bookCard({
-    required Ebook ebook,
-    required EbookUserState? state,
-    required bool opening,
-    required double? downloading,
-    required int totalSeconds,
-    required String? coverUrl,
-  }) {
+  Widget _searchBar() {
     final isDark = AppPalette.isDark(context);
-    final isPdf = ebook.fileType.toLowerCase() == 'pdf';
-    final typeColor = isPdf ? const Color(0xFFEF4444) : const Color(0xFF06B6D4);
-    final progress = ((state?.progress ?? 0.0) * 100).clamp(0, 100).toDouble();
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: opening ? null : () => _openEbookActions(ebook, state),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 18),
       child: Container(
-        margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.symmetric(horizontal: 14),
         decoration: BoxDecoration(
-          color: AppPalette.surfaceAlt(context),
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: AppPalette.border(context)),
+          color: isDark ? const Color(0xFF101B31).withValues(alpha: 0.82) : Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isDark ? Colors.white.withValues(alpha: 0.16) : const Color(0xFFD9E2F0),
+          ),
           boxShadow: [
             BoxShadow(
               color: AppPalette.softShadow(context),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
+              blurRadius: 12,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
         child: Row(
           children: [
-            _bookThumbnail(
-              coverUrl: coverUrl,
-              typeColor: typeColor,
-              isPdf: isPdf,
-            ),
-            const SizedBox(width: 12),
+            Icon(Icons.search_rounded, color: AppPalette.mutedText(context), size: 28),
+            const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    ebook.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    ebook.author,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      color: isDark ? const Color(0xFF9FB0CC) : Colors.black54,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      _tinyBadge(isPdf ? 'PDF' : 'EPUB', typeColor),
-                      if (state?.downloaded == true)
-                        _tinyBadge('Offline', const Color(0xFF10B981)),
-                      if (progress > 0)
-                        _tinyBadge(
-                          '${progress.toStringAsFixed(0)}%',
-                          const Color(0xFF2563EB),
-                        ),
-                      if (totalSeconds > 0)
-                        _tinyBadge(_formatDuration(totalSeconds), const Color(0xFF7C3AED)),
-                      ...ebook.tags.take(2).map(
-                        (tag) => _tinyBadge(tag, const Color(0xFF64748B)),
-                      ),
-                    ],
-                  ),
-                  if (downloading != null || progress > 0) ...[
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: downloading ?? (progress / 100),
-                      minHeight: 6,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ],
-                ],
+              child: TextField(
+                controller: _searchCtrl,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: 'Search books, authors, genres...',
+                  hintStyle: TextStyle(color: AppPalette.mutedText(context)),
+                  border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
+                  errorBorder: InputBorder.none,
+                  focusedErrorBorder: InputBorder.none,
+                  filled: false,
+                  isDense: true,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                ),
               ),
             ),
-            const SizedBox(width: 10),
-            opening || downloading != null
-                ? SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      value: downloading,
-                    ),
-                  )
-                : Icon(
-                    Icons.chevron_right_rounded,
-                    color: isDark ? const Color(0xFF9FB0CC) : null,
-                  ),
+            Icon(Icons.tune_rounded, color: AppPalette.mutedText(context), size: 24),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _genresSection(_EbookLibraryData data) {
+    final isDark = AppPalette.isDark(context);
+    final genres = _genreItems(data);
+
+    return Column(
+      children: [
+        _sectionHeader('Genres'),
+        SizedBox(
+          height: 54,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: genres.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 10),
+            itemBuilder: (context, i) {
+              final genre = genres[i];
+              final selected = _selectedTag.toLowerCase() == genre.label.toLowerCase();
+
+              return InkWell(
+                borderRadius: BorderRadius.circular(999),
+                onTap: () {
+                  setState(() {
+                    _selectedTag = selected ? 'All' : genre.label;
+                  });
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? const Color(0xFF151E33).withValues(alpha: selected ? 0.95 : 0.75)
+                        : genre.lightBackground,
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: selected
+                          ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.55)
+                          : (isDark
+                              ? Colors.white.withValues(alpha: 0.11)
+                              : const Color(0xFFDCE4F2)),
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      genre.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: isDark ? Colors.white : const Color(0xFF141A24),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _continueReadingSection(_EbookLibraryData data) {
+    final isDark = AppPalette.isDark(context);
+    final books = _currentlyReading(data);
+    if (books.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: [
+        const SizedBox(height: 18),
+        _sectionHeader('Continue Reading'),
+        SizedBox(
+          height: 166,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: books.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final ebook = books[i];
+              final progress = (data.userStates[ebook.id]?.progress ?? 0.0).clamp(0.0, 1.0);
+              final opening = _openingBookId == ebook.id;
+
+              return InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: opening ? null : () => _openEbookActions(ebook, data.userStates[ebook.id]),
+                child: Container(
+                  width: 340,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF131C31).withValues(alpha: 0.94) : Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: isDark
+                          ? Colors.white.withValues(alpha: 0.11)
+                          : const Color(0xFFDCE4F2),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      _bookThumbnail(
+                        coverUrl: data.coverUrls[ebook.id],
+                        typeColor: const Color(0xFF6366F1),
+                        isPdf: ebook.fileType.toLowerCase() == 'pdf',
+                        width: 78,
+                        height: 110,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              ebook.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w800),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              ebook.author,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: AppPalette.mutedText(context), fontSize: 15),
+                            ),
+                            const SizedBox(height: 14),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(999),
+                                    child: LinearProgressIndicator(
+                                      value: progress,
+                                      minHeight: 8,
+                                      backgroundColor: isDark
+                                          ? Colors.white.withValues(alpha: 0.12)
+                                          : const Color(0xFFE8ECF6),
+                                      color: const Color(0xFF7C6BFF),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  '${(progress * 100).round()}%',
+                                  style: const TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            Text(
+                              _estimatedRemainingText(ebook, data),
+                              style: TextStyle(color: AppPalette.mutedText(context), fontSize: 16),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _availableForYouSection(_EbookLibraryData data) {
+    final books = _filteredBooks(data);
+    return Column(
+      children: [
+        const SizedBox(height: 18),
+        _sectionHeader('Available for You'),
+        SizedBox(
+          height: 262,
+          child: ListView.separated(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            scrollDirection: Axis.horizontal,
+            itemCount: books.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 14),
+            itemBuilder: (context, i) {
+              final ebook = books[i];
+              final state = data.userStates[ebook.id];
+              return InkWell(
+                borderRadius: BorderRadius.circular(14),
+                onTap: _openingBookId == ebook.id ? null : () => _openEbookActions(ebook, state),
+                child: SizedBox(
+                  width: 122,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _bookThumbnail(
+                        coverUrl: data.coverUrls[ebook.id],
+                        typeColor: ebook.fileType.toLowerCase() == 'pdf'
+                            ? const Color(0xFFEF4444)
+                            : const Color(0xFF06B6D4),
+                        isPdf: ebook.fileType.toLowerCase() == 'pdf',
+                        width: 122,
+                        height: 170,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        ebook.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        ebook.author,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: AppPalette.mutedText(context), fontSize: 14),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -787,32 +867,53 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
     required String? coverUrl,
     required Color typeColor,
     required bool isPdf,
+    double width = 56,
+    double height = 72,
   }) {
     if (coverUrl == null || coverUrl.isEmpty) {
-      return _fallbackThumbnail(typeColor: typeColor, isPdf: isPdf);
+      return _fallbackThumbnail(
+        typeColor: typeColor,
+        isPdf: isPdf,
+        width: width,
+        height: height,
+      );
     }
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Image.network(
         coverUrl,
-        width: 56,
-        height: 72,
+        width: width,
+        height: height,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) =>
-            _fallbackThumbnail(typeColor: typeColor, isPdf: isPdf),
+        errorBuilder: (_, __, ___) => _fallbackThumbnail(
+          typeColor: typeColor,
+          isPdf: isPdf,
+          width: width,
+          height: height,
+        ),
         loadingBuilder: (context, child, loadingProgress) {
           if (loadingProgress == null) return child;
-          return _fallbackThumbnail(typeColor: typeColor, isPdf: isPdf);
+          return _fallbackThumbnail(
+            typeColor: typeColor,
+            isPdf: isPdf,
+            width: width,
+            height: height,
+          );
         },
       ),
     );
   }
 
-  Widget _fallbackThumbnail({required Color typeColor, required bool isPdf}) {
+  Widget _fallbackThumbnail({
+    required Color typeColor,
+    required bool isPdf,
+    required double width,
+    required double height,
+  }) {
     return Container(
-      width: 56,
-      height: 72,
+      width: width,
+      height: height,
       decoration: BoxDecoration(
         gradient: LinearGradient(
           colors: [typeColor.withValues(alpha: 0.9), typeColor],
@@ -824,113 +925,70 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
       child: Icon(
         isPdf ? Icons.picture_as_pdf_rounded : Icons.menu_book_rounded,
         color: Colors.white,
-        size: 30,
+        size: width > 70 ? 36 : 28,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = AppPalette.isDark(context);
+
     return Scaffold(
       backgroundColor: AppPalette.background(context),
       appBar: AppBar(
         title: const Text('E-Book Library'),
         centerTitle: true,
       ),
-      body: FutureBuilder<_EbookLibraryData>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(snapshot.error.toString()),
-                    const SizedBox(height: 10),
-                    FilledButton(onPressed: _refresh, child: const Text('Retry')),
-                  ],
-                ),
-              ),
-            );
-          }
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: isDark
+              ? const LinearGradient(
+                  colors: [Color(0xFF09111F), Color(0xFF0D1730), Color(0xFF09111F)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                )
+              : null,
+        ),
+        child: FutureBuilder<_EbookLibraryData>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          final data = snapshot.data!;
-          final tags = _availableTags(data.ebooks);
-          if (!tags.contains(_selectedTag)) {
-            _selectedTag = 'All';
-          }
-
-          final currentlyReading = _currentlyReading(data);
-          final visible = _visibleEbooks(data);
-
-          return RefreshIndicator(
-            onRefresh: _refresh,
-            child: ListView(
-              padding: const EdgeInsets.only(top: 16, bottom: 22),
-              children: [
-                _analyticsCard(data),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: TextField(
-                    controller: _searchCtrl,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      hintText: 'Search by title, author, or tag...',
-                      prefixIcon: const Icon(Icons.search),
-                      filled: true,
-                      fillColor: AppPalette.surfaceAlt(context),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
+            if (snapshot.hasError) {
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(snapshot.error.toString()),
+                      const SizedBox(height: 10),
+                      FilledButton(onPressed: _refresh, child: const Text('Retry')),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                _tagChips(tags),
-                if (currentlyReading.isNotEmpty) ...[
-                  const SizedBox(height: 8),
-                  _sectionTitle('Currently Reading'),
-                  ...currentlyReading.map((ebook) {
-                    final state = data.userStates[ebook.id];
-                    return _bookCard(
-                      ebook: ebook,
-                      state: state,
-                      opening: _openingBookId == ebook.id,
-                      downloading: _downloadProgress[ebook.id],
-                      totalSeconds: data.readingStats.totalSecondsByBook[ebook.id] ?? 0,
-                      coverUrl: data.coverUrls[ebook.id],
-                    );
-                  }),
+              );
+            }
+
+            final data = snapshot.data!;
+
+            return RefreshIndicator(
+              onRefresh: _refresh,
+              child: ListView(
+                padding: const EdgeInsets.only(top: 10, bottom: 24),
+                children: [
+                  _searchBar(),
+                  _genresSection(data),
+                  _continueReadingSection(data),
+                  _availableForYouSection(data),
                 ],
-                const SizedBox(height: 8),
-                _sectionTitle('All Books'),
-                if (visible.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 24),
-                    child: Center(child: Text('No matching books found')),
-                  )
-                else
-                  ...visible.map((ebook) {
-                    final state = data.userStates[ebook.id];
-                    return _bookCard(
-                      ebook: ebook,
-                      state: state,
-                      opening: _openingBookId == ebook.id,
-                      downloading: _downloadProgress[ebook.id],
-                      totalSeconds: data.readingStats.totalSecondsByBook[ebook.id] ?? 0,
-                      coverUrl: data.coverUrls[ebook.id],
-                    );
-                  }),
-              ],
-            ),
-          );
-        },
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -950,9 +1008,9 @@ class _EbookLibraryData {
   });
 }
 
-class _WeekComparison {
-  final String message;
-  final bool isPositive;
+class _GenreItem {
+  final String label;
+  final Color lightBackground;
 
-  const _WeekComparison({required this.message, required this.isPositive});
+  const _GenreItem(this.label, this.lightBackground);
 }

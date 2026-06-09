@@ -39,6 +39,17 @@ class MainActivity : FlutterActivity() {
                     result.success(null)
                 }
 
+                "showCouplePillNotification" -> {
+                    val title = call.argument<String>("title") ?: "New love pill"
+                    val message = call.argument<String>("message") ?: "Open Coupled to read it."
+                    CouplePillNotifier.showNotification(
+                        context = applicationContext,
+                        title = title,
+                        message = message
+                    )
+                    result.success(null)
+                }
+
                 "areNotificationsAllowed" -> {
                     result.success(areNotificationsAllowed())
                 }
@@ -82,7 +93,10 @@ class MainActivity : FlutterActivity() {
 
     private fun captureLaunchDestination() {
         val destination = intent?.getStringExtra(HabitReminderScheduler.EXTRA_DESTINATION)
-        if (destination == HabitReminderScheduler.DESTINATION_HABITS) {
+        if (
+            destination == HabitReminderScheduler.DESTINATION_HABITS ||
+            destination == HabitReminderScheduler.DESTINATION_COUPLED
+        ) {
             pendingLaunchDestination = destination
         }
     }

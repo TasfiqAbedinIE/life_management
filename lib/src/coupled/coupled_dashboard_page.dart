@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../theme/app_theme.dart';
 import 'couple_repository.dart';
+import 'coupled_request_page.dart';
+import 'love_pill_section.dart';
 import 'shopping_hub_section.dart';
 import 'tour_plan_section.dart';
 
@@ -24,6 +26,7 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
   Timer? _timer;
   Duration _elapsed = Duration.zero;
   String? _coupleId;
+  bool _decoupling = false;
 
   late String _romanticMessage;
   final _messages = const [
@@ -103,6 +106,77 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
     });
   }
 
+  Future<void> _confirmDecouple() async {
+    final coupleId = _coupleId;
+    if (coupleId == null || _decoupling) return;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        final isDark = AppPalette.isDark(context);
+        final accentColor = isDark
+            ? const Color(0xFFFF8FB1)
+            : Colors.pink.shade700;
+
+        return AlertDialog(
+          backgroundColor: isDark ? const Color(0xFF221729) : Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(28),
+          ),
+          title: Row(
+            children: [
+              Icon(Icons.heart_broken_rounded, color: accentColor),
+              const SizedBox(width: 10),
+              const Expanded(child: Text('Decouple partner?')),
+            ],
+          ),
+          content: const Text(
+            'This will end the active couple connection. Your shared history will stay saved, but couple features will no longer be shared with this partner.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Keep together'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              style: FilledButton.styleFrom(
+                backgroundColor: accentColor,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Decouple'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _decoupling = true);
+    final error = await _repo.decouple(coupleId);
+
+    if (!mounted) return;
+
+    setState(() => _decoupling = false);
+
+    if (error != null) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
+      return;
+    }
+
+    _timer?.cancel();
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('You are decoupled now.')));
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const CoupledRequestPage()),
+      (route) => route.isFirst,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bgImage = 'assets/coupled_images/couple-1.png';
@@ -131,6 +205,31 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         foregroundColor: accentColor,
+        actions: [
+          Padding(
+            padding: const EdgeInsets.only(right: 10),
+            child: IconButton.filledTonal(
+              tooltip: 'Decouple partner',
+              onPressed: _coupleId == null || _decoupling
+                  ? null
+                  : _confirmDecouple,
+              style: IconButton.styleFrom(
+                backgroundColor: cardColor.withValues(alpha: 0.72),
+                foregroundColor: accentColor,
+              ),
+              icon: _decoupling
+                  ? SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: accentColor,
+                      ),
+                    )
+                  : const Icon(Icons.heart_broken_rounded),
+            ),
+          ),
+        ],
       ),
       extendBodyBehindAppBar: true,
       body: DecoratedBox(
@@ -158,12 +257,17 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
               child: LayoutBuilder(
                 builder: (context, constraints) {
                   return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 20,
+                      vertical: 12,
+                    ),
                     child: _loading
                         ? const Center(child: CircularProgressIndicator())
                         : SingleChildScrollView(
                             child: ConstrainedBox(
-                              constraints: BoxConstraints(minHeight: constraints.maxHeight - 24),
+                              constraints: BoxConstraints(
+                                minHeight: constraints.maxHeight - 24,
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.stretch,
                                 children: [
@@ -179,7 +283,9 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                                           BoxShadow(
                                             blurRadius: 16,
                                             spreadRadius: 1,
-                                            color: Colors.black.withValues(alpha: 0.18),
+                                            color: Colors.black.withValues(
+                                              alpha: 0.18,
+                                            ),
                                             offset: const Offset(0, 10),
                                           ),
                                         ],
@@ -187,7 +293,10 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                                       ),
                                       child: Row(
                                         children: [
-                                          Icon(Icons.favorite_rounded, color: accentColor),
+                                          Icon(
+                                            Icons.favorite_rounded,
+                                            color: accentColor,
+                                          ),
                                           const SizedBox(width: 10),
                                           Expanded(
                                             child: Text(
@@ -195,12 +304,17 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                                               style: TextStyle(
                                                 fontSize: 16,
                                                 fontWeight: FontWeight.w500,
-                                                color: Theme.of(context).colorScheme.onSurface,
+                                                color: Theme.of(
+                                                  context,
+                                                ).colorScheme.onSurface,
                                               ),
                                             ),
                                           ),
                                           const SizedBox(width: 10),
-                                          Icon(Icons.auto_awesome_rounded, color: accentColor),
+                                          Icon(
+                                            Icons.auto_awesome_rounded,
+                                            color: accentColor,
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -215,7 +329,9 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                                         BoxShadow(
                                           blurRadius: 18,
                                           spreadRadius: 2,
-                                          color: Colors.black.withValues(alpha: 0.2),
+                                          color: Colors.black.withValues(
+                                            alpha: 0.2,
+                                          ),
                                           offset: const Offset(0, 12),
                                         ),
                                       ],
@@ -224,7 +340,9 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                                     child: Row(
                                       children: [
                                         ClipRRect(
-                                          borderRadius: BorderRadius.circular(20),
+                                          borderRadius: BorderRadius.circular(
+                                            20,
+                                          ),
                                           child: Image.asset(
                                             counterImage,
                                             height: 80,
@@ -235,7 +353,8 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                                         const SizedBox(width: 16),
                                         Expanded(
                                           child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
                                             children: [
                                               const Text(
                                                 'Time together',
@@ -259,7 +378,9 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                                                   style: TextStyle(
                                                     fontSize: 13,
                                                     color: isDark
-                                                        ? const Color(0xFFFF9DA9)
+                                                        ? const Color(
+                                                            0xFFFF9DA9,
+                                                          )
                                                         : Colors.red.shade400,
                                                   ),
                                                 ),
@@ -267,7 +388,9 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                                               _relationshipDate == null
                                                   ? const Text(
                                                       'Set your anniversary date to start the counter.',
-                                                      style: TextStyle(fontSize: 14),
+                                                      style: TextStyle(
+                                                        fontSize: 14,
+                                                      ),
                                                     )
                                                   : _buildTimerRow(timeParts),
                                             ],
@@ -278,9 +401,20 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                                   ),
                                   if (_coupleId != null) ...[
                                     const SizedBox(height: 20),
-                                    ShoppingHubSection(coupleId: _coupleId!, repo: _repo),
+                                    LovePillSection(
+                                      coupleId: _coupleId!,
+                                      repo: _repo,
+                                    ),
                                     const SizedBox(height: 20),
-                                    TourPlanSection(coupleId: _coupleId!, repo: _repo),
+                                    ShoppingHubSection(
+                                      coupleId: _coupleId!,
+                                      repo: _repo,
+                                    ),
+                                    const SizedBox(height: 20),
+                                    TourPlanSection(
+                                      coupleId: _coupleId!,
+                                      repo: _repo,
+                                    ),
                                   ],
                                 ],
                               ),

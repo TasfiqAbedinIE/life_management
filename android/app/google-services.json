@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1087803873735",
+    "project_id": "wrapco-acc87",
+    "storage_bucket": "wrapco-acc87.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1087803873735:android:b5d3ae99aaa2847ca221e2",
+        "android_client_info": {
+          "package_name": "com.example.wrapco"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBaqJY8hOmwiGRRqmxfAhu_OnhRGB4r_yo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

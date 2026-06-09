@@ -84,6 +84,16 @@ class HabitNotificationService {
     });
   }
 
+  static Future<void> showCouplePillNotification({
+    required String title,
+    required String message,
+  }) async {
+    await _channel.invokeMethod('showCouplePillNotification', {
+      'title': title,
+      'message': message,
+    });
+  }
+
   static Future<String?> consumeLaunchDestination() {
     return _channel.invokeMethod<String>('consumeLaunchDestination');
   }

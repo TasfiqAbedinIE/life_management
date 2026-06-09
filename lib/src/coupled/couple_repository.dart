@@ -149,6 +149,30 @@ class CoupleRepository {
     }
   }
 
+  /// Soft-close an active couple relationship without deleting shared history.
+  Future<String?> decouple(String coupleId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return 'You need to be logged in.';
+
+    try {
+      final updated = await _client
+          .from('couples')
+          .update({'status': 'cancelled'})
+          .eq('id', coupleId)
+          .eq('status', 'active')
+          .select('id')
+          .maybeSingle();
+
+      if (updated == null) {
+        return 'Could not find an active couple connection to decouple.';
+      }
+
+      return null;
+    } catch (_) {
+      return 'Failed to decouple. Please try again.';
+    }
+  }
+
   // ===== TOUR PLANS =====
 
   Future<List<Map<String, dynamic>>> fetchTourPlans(String coupleId) async {
@@ -224,6 +248,47 @@ class CoupleRepository {
     } catch (_) {
       return 'Failed to delete tour plan';
     }
+  }
+
+  // ===== LOVE PILLS =====
+
+  Future<List<Map<String, dynamic>>> fetchLovePills(String coupleId) async {
+    final res = await _client
+        .from('couple_love_pills')
+        .select('id, couple_id, sender_id, message, pill_type, created_at')
+        .eq('couple_id', coupleId)
+        .order('created_at', ascending: false)
+        .limit(40);
+
+    if (res is List) {
+      return res.map((e) => Map<String, dynamic>.from(e)).toList();
+    }
+    return [];
+  }
+
+  Future<Map<String, dynamic>?> sendLovePill({
+    required String coupleId,
+    required String message,
+    required String pillType,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return null;
+
+    final trimmed = message.trim();
+    if (trimmed.isEmpty) return null;
+
+    final inserted = await _client
+        .from('couple_love_pills')
+        .insert({
+          'couple_id': coupleId,
+          'sender_id': user.id,
+          'message': trimmed,
+          'pill_type': pillType,
+        })
+        .select('id, couple_id, sender_id, message, pill_type, created_at')
+        .single();
+
+    return Map<String, dynamic>.from(inserted as Map);
   }
 
   // ===== SHOPPING LISTS =====

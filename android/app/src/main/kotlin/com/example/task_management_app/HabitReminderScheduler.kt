@@ -33,6 +33,7 @@ object HabitReminderScheduler {
     const val EXTRA_TRIGGER_AT = "trigger_at"
     const val EXTRA_DESTINATION = "destination"
     const val DESTINATION_HABITS = "habits"
+    const val DESTINATION_COUPLED = "coupled"
 
     fun configure(context: Context, enabled: Boolean, startMinutes: Int, intervalHours: Int) {
         saveSettings(context, enabled, startMinutes, intervalHours)

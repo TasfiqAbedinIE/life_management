@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'src/bootstrap/app_bootstrap.dart';
 import 'src/bootstrap/settings_bootstrap.dart';
+import 'src/coupled/coupled_request_page.dart';
 import 'src/habits/presentation/habits_page.dart';
 import 'src/habits/widget/habit_widget_service.dart';
 import 'src/pages/app_entry_page.dart';
 import 'src/services/habit_notification_service.dart';
+import 'src/services/push_notification_service.dart';
 import 'src/theme/app_theme.dart';
 
 /// Place this file at: lib/main.dart
@@ -16,6 +20,7 @@ import 'src/theme/app_theme.dart';
 Future<void> main() async {
   await AppBootstrap.ensureInitialized();
   await HabitWidgetService.initialize();
+  PushNotificationService.registerBackgroundHandler();
 
   runApp(const TaskApp());
 }
@@ -34,6 +39,7 @@ class _TaskAppState extends State<TaskApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(PushNotificationService.initialize(_navigatorKey));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _handlePendingLaunch();
     });
@@ -55,16 +61,18 @@ class _TaskAppState extends State<TaskApp> with WidgetsBindingObserver {
   Future<void> _handlePendingLaunch() async {
     final destination =
         await HabitNotificationService.consumeLaunchDestination();
-    if (!mounted || destination != 'habits') return;
+    if (!mounted || (destination != 'habits' && destination != 'coupled')) return;
     if (Supabase.instance.client.auth.currentSession == null) return;
 
     final navigator = _navigatorKey.currentState;
     final context = _navigatorKey.currentContext;
     if (navigator == null || context == null) return;
 
-    navigator.push(
-      MaterialPageRoute(builder: (_) => const HabitsPage()),
-    );
+    final page = destination == 'coupled'
+        ? const CoupledRequestPage()
+        : const HabitsPage();
+
+    navigator.push(MaterialPageRoute(builder: (_) => page));
   }
 
   @override

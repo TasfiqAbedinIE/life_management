@@ -23,7 +23,7 @@ object CouplePillNotifier {
 
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
-            putExtra(HabitReminderScheduler.EXTRA_DESTINATION, HabitReminderScheduler.DESTINATION_COUPLED)
+            putExtra(HabitReminderScheduler.EXTRA_DESTINATION, HabitReminderScheduler.DESTINATION_LOVE_PILLS)
         }
 
         val pendingIntent = PendingIntent.getActivity(
@@ -48,7 +48,7 @@ object CouplePillNotifier {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)
-            .addAction(R.mipmap.ic_launcher, "Open Coupled", pendingIntent)
+            .addAction(R.mipmap.ic_launcher, "Open Love Pills", pendingIntent)
             .build()
 
         NotificationManagerCompat.from(context).notify(notificationId, notification)

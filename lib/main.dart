@@ -6,6 +6,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'src/bootstrap/app_bootstrap.dart';
 import 'src/bootstrap/settings_bootstrap.dart';
 import 'src/coupled/coupled_request_page.dart';
+import 'src/coupled/couple_repository.dart';
+import 'src/coupled/love_pill_page.dart';
 import 'src/habits/presentation/habits_page.dart';
 import 'src/habits/widget/habit_widget_service.dart';
 import 'src/pages/app_entry_page.dart';
@@ -61,16 +63,31 @@ class _TaskAppState extends State<TaskApp> with WidgetsBindingObserver {
   Future<void> _handlePendingLaunch() async {
     final destination =
         await HabitNotificationService.consumeLaunchDestination();
-    if (!mounted || (destination != 'habits' && destination != 'coupled')) return;
+    if (!mounted ||
+        (destination != 'habits' &&
+            destination != 'coupled' &&
+            destination != 'love_pills')) {
+      return;
+    }
     if (Supabase.instance.client.auth.currentSession == null) return;
 
     final navigator = _navigatorKey.currentState;
     final context = _navigatorKey.currentContext;
     if (navigator == null || context == null) return;
 
-    final page = destination == 'coupled'
-        ? const CoupledRequestPage()
-        : const HabitsPage();
+    Widget page;
+    if (destination == 'love_pills') {
+      final repo = CoupleRepository(Supabase.instance.client);
+      final couple = await repo.fetchExistingCouple();
+      final coupleId = couple?['id']?.toString();
+      page = couple?['status'] == 'active' && coupleId != null
+          ? LovePillPage(coupleId: coupleId, repo: repo)
+          : const CoupledRequestPage();
+    } else {
+      page = destination == 'coupled'
+          ? const CoupledRequestPage()
+          : const HabitsPage();
+    }
 
     navigator.push(MaterialPageRoute(builder: (_) => page));
   }
@@ -102,9 +119,7 @@ class _TaskAppState extends State<TaskApp> with WidgetsBindingObserver {
               theme: AppTheme.lightTheme(font),
               darkTheme: AppTheme.darkTheme(font),
               themeMode: mode,
-              home: const SettingsBootstrap(
-                child: AppEntryPage(),
-              ),
+              home: const SettingsBootstrap(child: AppEntryPage()),
             );
           },
         );

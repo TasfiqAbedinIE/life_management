@@ -7,7 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../theme/app_theme.dart';
 import 'couple_repository.dart';
 import 'coupled_request_page.dart';
-import 'love_pill_section.dart';
+import 'love_pill_page.dart';
 import 'shopping_hub_section.dart';
 import 'tour_plan_section.dart';
 
@@ -24,9 +24,11 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
   bool _loading = true;
   DateTime? _relationshipDate;
   Timer? _timer;
+  RealtimeChannel? _pillBadgeChannel;
   Duration _elapsed = Duration.zero;
   String? _coupleId;
   bool _decoupling = false;
+  int _unreadPills = 0;
 
   late String _romanticMessage;
   final _messages = const [
@@ -68,6 +70,56 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
     });
 
     _startTimer();
+    unawaited(_loadUnreadPills());
+    _subscribeToUnreadPills(_coupleId!);
+  }
+
+  Future<void> _loadUnreadPills() async {
+    final coupleId = _coupleId;
+    if (coupleId == null) return;
+
+    try {
+      final count = await _repo.fetchUnreadLovePillCount(coupleId);
+      if (mounted) setState(() => _unreadPills = count);
+    } catch (_) {
+      // Keep the dashboard usable if unread metadata is temporarily unavailable.
+    }
+  }
+
+  void _subscribeToUnreadPills(String coupleId) {
+    final existing = _pillBadgeChannel;
+    if (existing != null) {
+      unawaited(Supabase.instance.client.removeChannel(existing));
+    }
+
+    final channel = Supabase.instance.client.channel(
+      'love-pill-badge-$coupleId',
+    );
+    channel.onPostgresChanges(
+      event: PostgresChangeEvent.all,
+      schema: 'public',
+      table: 'couple_love_pills',
+      filter: PostgresChangeFilter(
+        type: PostgresChangeFilterType.eq,
+        column: 'couple_id',
+        value: coupleId,
+      ),
+      callback: (_) => unawaited(_loadUnreadPills()),
+    );
+    channel.subscribe();
+    _pillBadgeChannel = channel;
+  }
+
+  Future<void> _openLovePills() async {
+    final coupleId = _coupleId;
+    if (coupleId == null) return;
+
+    await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => LovePillPage(coupleId: coupleId, repo: _repo),
+      ),
+    );
+    if (mounted) unawaited(_loadUnreadPills());
   }
 
   void _startTimer() {
@@ -97,6 +149,10 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
   @override
   void dispose() {
     _timer?.cancel();
+    final channel = _pillBadgeChannel;
+    if (channel != null) {
+      unawaited(Supabase.instance.client.removeChannel(channel));
+    }
     super.dispose();
   }
 
@@ -206,6 +262,13 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
         elevation: 0,
         foregroundColor: accentColor,
         actions: [
+          _LovePillAppBarButton(
+            unreadCount: _unreadPills,
+            accentColor: accentColor,
+            backgroundColor: cardColor.withValues(alpha: 0.72),
+            onPressed: _coupleId == null ? null : _openLovePills,
+          ),
+          const SizedBox(width: 4),
           Padding(
             padding: const EdgeInsets.only(right: 10),
             child: IconButton.filledTonal(
@@ -401,11 +464,6 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
                                   ),
                                   if (_coupleId != null) ...[
                                     const SizedBox(height: 20),
-                                    LovePillSection(
-                                      coupleId: _coupleId!,
-                                      repo: _repo,
-                                    ),
-                                    const SizedBox(height: 20),
                                     ShoppingHubSection(
                                       coupleId: _coupleId!,
                                       repo: _repo,
@@ -508,6 +566,71 @@ class _CoupledDashboardPageState extends State<CoupledDashboardPage> {
         ':',
         style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
       ),
+    );
+  }
+}
+
+class _LovePillAppBarButton extends StatelessWidget {
+  const _LovePillAppBarButton({
+    required this.unreadCount,
+    required this.accentColor,
+    required this.backgroundColor,
+    required this.onPressed,
+  });
+
+  final int unreadCount;
+  final Color accentColor;
+  final Color backgroundColor;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = unreadCount > 99 ? '99+' : '$unreadCount';
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        IconButton.filledTonal(
+          tooltip: 'Open Love Pills',
+          onPressed: onPressed,
+          style: IconButton.styleFrom(
+            backgroundColor: backgroundColor,
+            foregroundColor: accentColor,
+          ),
+          icon: const Icon(Icons.medication_liquid_rounded),
+        ),
+        if (unreadCount > 0)
+          Positioned(
+            top: 0,
+            right: -3,
+            child: Container(
+              constraints: const BoxConstraints(minWidth: 19, minHeight: 19),
+              padding: const EdgeInsets.symmetric(horizontal: 5),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE22D58),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: Colors.white, width: 1.5),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x33000000),
+                    blurRadius: 6,
+                    offset: Offset(0, 2),
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                label,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  height: 1,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

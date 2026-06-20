@@ -32,6 +32,7 @@ class HabitRepository {
   Future<Habit> createHabit({
     required String name,
     required int frequencyPerDay,
+    required List<int> scheduledWeekdays,
     String? colorHex,
   }) async {
     final user = client.auth.currentUser;
@@ -43,6 +44,7 @@ class HabitRepository {
       'user_id': user.id, // uuid from auth.users
       'name': name,
       'frequency_per_day': frequencyPerDay,
+      'scheduled_weekdays': scheduledWeekdays,
       'color_hex': colorHex,
     };
 
@@ -51,13 +53,14 @@ class HabitRepository {
         .insert(insertMap)
         .select()
         .single();
-    return Habit.fromMap(data as Map<String, dynamic>);
+    return Habit.fromMap(data);
   }
 
   Future<Habit> updateHabit({
     required String habitId,
     required String name,
     required int frequencyPerDay,
+    required List<int> scheduledWeekdays,
     String? colorHex,
   }) async {
     final data = await client
@@ -65,13 +68,14 @@ class HabitRepository {
         .update({
           'name': name,
           'frequency_per_day': frequencyPerDay,
+          'scheduled_weekdays': scheduledWeekdays,
           'color_hex': colorHex,
         })
         .eq('id', habitId)
         .select()
         .single();
 
-    return Habit.fromMap(data as Map<String, dynamic>);
+    return Habit.fromMap(data);
   }
 
   Future<void> archiveHabit(String habitId) async {
@@ -90,7 +94,7 @@ class HabitRepository {
   // --- entries ---
   Future<List<HabitEntry>> fetchEntriesForHabit({
     required String habitId,
-    int days = 30,
+    int days = 365,
   }) async {
     final now = DateTime.now();
     final from = DateTime(
@@ -129,6 +133,7 @@ class HabitRepository {
     required Habit habit,
     required int newCount,
   }) async {
+    if (!habit.isScheduledOn(DateTime.now())) return;
     final clamped = newCount.clamp(0, habit.frequencyPerDay);
     final today = _todayKey();
 
@@ -171,7 +176,7 @@ class HabitRepository {
 
   Future<Map<String, List<HabitEntry>>> fetchEntriesForHabits({
     required List<String> habitIds,
-    int days = 30,
+    int days = 365,
   }) async {
     if (habitIds.isEmpty) return {};
 

@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:sqflite/sqflite.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'ebook_reading_db.dart';
 
@@ -26,11 +29,21 @@ class EbookReadingStats {
 class EbookReadingRepository {
   final EbookReadingDB _db = EbookReadingDB.instance;
 
+  static final StreamController<void> _statsChanges =
+      StreamController<void>.broadcast();
+
+  static Stream<void> get statsChanges => _statsChanges.stream;
+
+  String? get _currentUserId => Supabase.instance.client.auth.currentUser?.id;
+
   Future<void> addReadingDuration({
     required String ebookId,
     required Duration duration,
     DateTime? endedAt,
   }) async {
+    final userId = _currentUserId;
+    if (userId == null || userId.isEmpty) return;
+
     final totalSeconds = duration.inSeconds;
     if (totalSeconds <= 0) return;
 
@@ -53,26 +66,43 @@ class EbookReadingRepository {
 
       await db.rawInsert(
         '''
-        INSERT INTO ebook_reading_daily(ebook_id, day_key, seconds, updated_at)
-        VALUES(?, ?, ?, ?)
-        ON CONFLICT(ebook_id, day_key)
+        INSERT INTO ebook_reading_daily(user_id, ebook_id, day_key, seconds, updated_at)
+        VALUES(?, ?, ?, ?, ?)
+        ON CONFLICT(user_id, ebook_id, day_key)
         DO UPDATE SET
           seconds = seconds + excluded.seconds,
           updated_at = excluded.updated_at
         ''',
-        [ebookId, dayKey, chunk, DateTime.now().toIso8601String()],
+        [userId, ebookId, dayKey, chunk, DateTime.now().toIso8601String()],
       );
 
       remaining -= chunk;
       cursor = dayStart;
     }
+
+    _statsChanges.add(null);
   }
 
   Future<EbookReadingStats> fetchStats() async {
+    final userId = _currentUserId;
+    if (userId == null || userId.isEmpty) {
+      return const EbookReadingStats(
+        totalSecondsByBook: {},
+        currentWeekSeconds: 0,
+        previousWeekSeconds: 0,
+      );
+    }
+
     final db = await _db.database;
 
     final totalRows = await db.rawQuery(
-      'SELECT ebook_id, SUM(seconds) AS total_seconds FROM ebook_reading_daily GROUP BY ebook_id',
+      '''
+      SELECT ebook_id, SUM(seconds) AS total_seconds
+      FROM ebook_reading_daily
+      WHERE user_id = ?
+      GROUP BY ebook_id
+      ''',
+      [userId],
     );
 
     final totalSecondsByBook = <String, int>{};
@@ -90,29 +120,37 @@ class EbookReadingRepository {
 
     final currentWeekSeconds = await _sumSecondsBetween(
       db,
+      userId: userId,
       start: currentWeekStart,
       end: nextWeekStart,
     );
 
     final previousWeekSeconds = await _sumSecondsBetween(
       db,
+      userId: userId,
       start: prevWeekStart,
       end: currentWeekStart,
     );
 
     final currentWeekDailySeconds = await _dailySecondsBetween(
       db,
+      userId: userId,
       start: currentWeekStart,
       end: nextWeekStart,
     );
 
     final currentWeekBooksRead = await _distinctBooksBetween(
       db,
+      userId: userId,
       start: currentWeekStart,
       end: nextWeekStart,
     );
 
-    final readingStreakDays = await _readingStreakDays(db, DateTime.now());
+    final readingStreakDays = await _readingStreakDays(
+      db,
+      userId: userId,
+      throughDate: DateTime.now(),
+    );
 
     return EbookReadingStats(
       totalSecondsByBook: totalSecondsByBook,
@@ -126,6 +164,7 @@ class EbookReadingRepository {
 
   Future<int> _sumSecondsBetween(
     Database db, {
+    required String userId,
     required DateTime start,
     required DateTime end,
   }) async {
@@ -133,9 +172,9 @@ class EbookReadingRepository {
       '''
       SELECT COALESCE(SUM(seconds), 0) AS total_seconds
       FROM ebook_reading_daily
-      WHERE day_key >= ? AND day_key < ?
+      WHERE user_id = ? AND day_key >= ? AND day_key < ?
       ''',
-      [_dayKey(start), _dayKey(end)],
+      [userId, _dayKey(start), _dayKey(end)],
     );
 
     if (rows.isEmpty) return 0;
@@ -144,6 +183,7 @@ class EbookReadingRepository {
 
   Future<Map<DateTime, int>> _dailySecondsBetween(
     Database db, {
+    required String userId,
     required DateTime start,
     required DateTime end,
   }) async {
@@ -151,10 +191,10 @@ class EbookReadingRepository {
       '''
       SELECT day_key, COALESCE(SUM(seconds), 0) AS total_seconds
       FROM ebook_reading_daily
-      WHERE day_key >= ? AND day_key < ?
+      WHERE user_id = ? AND day_key >= ? AND day_key < ?
       GROUP BY day_key
       ''',
-      [_dayKey(start), _dayKey(end)],
+      [userId, _dayKey(start), _dayKey(end)],
     );
 
     final dailySeconds = <DateTime, int>{};
@@ -168,6 +208,7 @@ class EbookReadingRepository {
 
   Future<int> _distinctBooksBetween(
     Database db, {
+    required String userId,
     required DateTime start,
     required DateTime end,
   }) async {
@@ -175,25 +216,29 @@ class EbookReadingRepository {
       '''
       SELECT COUNT(DISTINCT ebook_id) AS book_count
       FROM ebook_reading_daily
-      WHERE day_key >= ? AND day_key < ? AND seconds > 0
+      WHERE user_id = ? AND day_key >= ? AND day_key < ? AND seconds > 0
       ''',
-      [_dayKey(start), _dayKey(end)],
+      [userId, _dayKey(start), _dayKey(end)],
     );
 
     if (rows.isEmpty) return 0;
     return (rows.first['book_count'] as num?)?.toInt() ?? 0;
   }
 
-  Future<int> _readingStreakDays(Database db, DateTime throughDate) async {
+  Future<int> _readingStreakDays(
+    Database db, {
+    required String userId,
+    required DateTime throughDate,
+  }) async {
     final rows = await db.rawQuery(
       '''
       SELECT day_key, COALESCE(SUM(seconds), 0) AS total_seconds
       FROM ebook_reading_daily
-      WHERE day_key <= ?
+      WHERE user_id = ? AND day_key <= ?
       GROUP BY day_key
       HAVING total_seconds > 0
       ''',
-      [_dayKey(throughDate)],
+      [userId, _dayKey(throughDate)],
     );
 
     final activeDays = <String>{};

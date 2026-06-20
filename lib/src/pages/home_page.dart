@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
+import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'sign_in_page.dart';
 import 'task_page.dart';
@@ -9,10 +10,14 @@ import 'dart:async';
 
 import '../coupled/coupled_request_page.dart';
 import '../habits/presentation/habits_page.dart';
+import '../habits/models/habit.dart';
+import '../habits/models/habit_entry.dart';
+import '../habits/models/habit_performance.dart';
 import '../habits/widget/habit_widget_service.dart';
 import '../notes/pages/notes_list_page.dart';
 import '../ebook/data/ebook_reading_repository.dart';
 import '../ebook/ui/ebook_library_page.dart';
+import '../budgeting/data/budgeting_repository.dart';
 import '../budgeting/presentation/budgeting_page.dart';
 import '../project_management/presentation/project_management_page.dart';
 import '../theme/app_theme.dart';
@@ -27,6 +32,12 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   static const String _generatedIconBase = 'assets/generated_icons/manual_pack';
 
+  final GlobalKey<_ReaderDashboardSectionState> _readerDashboardKey =
+      GlobalKey<_ReaderDashboardSectionState>();
+  final GlobalKey<_BudgetDashboardSectionState> _budgetDashboardKey =
+      GlobalKey<_BudgetDashboardSectionState>();
+  final GlobalKey<_HabitsDashboardSectionState> _habitsDashboardKey =
+      GlobalKey<_HabitsDashboardSectionState>();
   late Future<_EfficiencySummary> _efficiencyFuture;
 
   late DateTime _now;
@@ -527,23 +538,22 @@ class _HomePageState extends State<HomePage> {
                     const SizedBox(height: 16),
 
                     _HabitsDashboardSection(
-                      onOpenHabits: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const HabitsPage()),
-                        );
-                      },
+                      key: _habitsDashboardKey,
+                      onOpenHabits: _openHabitsPage,
                     ),
 
                     const SizedBox(height: 12),
 
                     _ReaderDashboardSection(
-                      onOpenReader: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const EbookLibraryPage(),
-                          ),
-                        );
-                      },
+                      key: _readerDashboardKey,
+                      onOpenReader: _openReaderLibrary,
+                    ),
+
+                    const SizedBox(height: 12),
+
+                    _BudgetDashboardSection(
+                      key: _budgetDashboardKey,
+                      onOpenBudget: _openBudgeting,
                     ),
 
                     const SizedBox(height: 24),
@@ -560,6 +570,14 @@ class _HomePageState extends State<HomePage> {
   Future<void> _onRefreshDashboard() async {
     // Re-fetch quotes from Supabase
     await _fetchAllQuotes();
+    await Future.wait([
+      if (_habitsDashboardKey.currentState case final habits?)
+        habits.refresh(),
+      if (_readerDashboardKey.currentState case final reader?)
+        reader._refresh(),
+      if (_budgetDashboardKey.currentState case final budget?)
+        budget._refresh(),
+    ]);
 
     if (!mounted) return;
 
@@ -610,11 +628,7 @@ class _HomePageState extends State<HomePage> {
             fit: BoxFit.contain,
           ),
           label: "Habits",
-          onTap: () {
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const HabitsPage()));
-          },
+          onTap: _openHabitsPage,
         ),
         _MinimalActionButton(
           icon: Image.asset("assets/icon/notes_icon.png", fit: BoxFit.contain),
@@ -631,11 +645,7 @@ class _HomePageState extends State<HomePage> {
             fit: BoxFit.contain,
           ),
           label: "Budget",
-          onTap: () {
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const BudgetingPage()));
-          },
+          onTap: _openBudgeting,
         ),
         _MinimalActionButton(
           icon: SvgPicture.asset(
@@ -643,11 +653,7 @@ class _HomePageState extends State<HomePage> {
             fit: BoxFit.contain,
           ),
           label: "Reader",
-          onTap: () {
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const EbookLibraryPage()));
-          },
+          onTap: _openReaderLibrary,
         ),
         _MinimalActionButton(
           icon: SvgPicture.asset(
@@ -675,6 +681,39 @@ class _HomePageState extends State<HomePage> {
         ),
       ],
     );
+  }
+
+  Future<void> _openReaderLibrary() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const EbookLibraryPage()));
+
+    if (!mounted) return;
+    final readerSection = _readerDashboardKey.currentState;
+    if (readerSection != null) {
+      await readerSection._refresh();
+    }
+  }
+
+  Future<void> _openBudgeting() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const BudgetingPage()));
+
+    if (!mounted) return;
+    final budgetSection = _budgetDashboardKey.currentState;
+    if (budgetSection != null) {
+      await budgetSection._refresh();
+    }
+  }
+
+  Future<void> _openHabitsPage() async {
+    await Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const HabitsPage()));
+
+    if (!mounted) return;
+    await _habitsDashboardKey.currentState?.refresh();
   }
 
   Widget _labelFilterChips() {
@@ -1257,20 +1296,8 @@ class _EfficiencyChart extends StatelessWidget {
   }
 }
 
-class _Habit {
-  final String id;
-  final String name;
-  final int frequencyPerDay;
-
-  const _Habit({
-    required this.id,
-    required this.name,
-    required this.frequencyPerDay,
-  });
-}
-
 class _HabitsDashboardData {
-  final List<_Habit> habits;
+  final List<Habit> habits;
 
   /// today done_count map by habit_id
   final Map<String, int> todayDone;
@@ -1280,25 +1307,25 @@ class _HabitsDashboardData {
 
   /// Heatmap: entry_date -> completion fraction (0.0 to 1.0)
   final Map<String, double> dayCompletion;
+  final Map<String, int> dayCompletedUnits;
+  final Map<String, int> dayTargetUnits;
 
   const _HabitsDashboardData({
     required this.habits,
     required this.todayDone,
     required this.weekDone,
     required this.dayCompletion,
+    required this.dayCompletedUnits,
+    required this.dayTargetUnits,
   });
 
   int get totalHabits => habits.length;
 
   double get overall7DayPercent {
-    if (dayCompletion.isEmpty) return 0;
-    // Use only last 7 days from available heatmap data
-    final keys = dayCompletion.keys.toList()..sort();
-    final last7 = keys.length <= 7 ? keys : keys.sublist(keys.length - 7);
-    final avg =
-        last7.fold<double>(0, (p, k) => p + (dayCompletion[k] ?? 0.0)) /
-        last7.length;
-    return avg * 100.0;
+    return HabitPerformance(
+      completedUnitsByDay: dayCompletedUnits,
+      targetUnitsByDay: dayTargetUnits,
+    ).percentForLastDays(DateTime.now(), 7);
   }
 }
 
@@ -1345,9 +1372,9 @@ class _MinimalActionButton extends StatelessWidget {
 }
 
 class _ReaderDashboardSection extends StatefulWidget {
-  const _ReaderDashboardSection({required this.onOpenReader});
+  const _ReaderDashboardSection({super.key, required this.onOpenReader});
 
-  final VoidCallback onOpenReader;
+  final Future<void> Function() onOpenReader;
 
   @override
   State<_ReaderDashboardSection> createState() =>
@@ -1357,6 +1384,7 @@ class _ReaderDashboardSection extends StatefulWidget {
 class _ReaderDashboardSectionState extends State<_ReaderDashboardSection> {
   final EbookReadingRepository _readingRepository = EbookReadingRepository();
   late Future<EbookReadingStats> _future;
+  late final StreamSubscription<void> _statsSubscription;
 
   static const int _weeklyGoalSeconds = 6 * 60 * 60;
 
@@ -1364,12 +1392,26 @@ class _ReaderDashboardSectionState extends State<_ReaderDashboardSection> {
   void initState() {
     super.initState();
     _future = _readingRepository.fetchStats();
+    _statsSubscription = EbookReadingRepository.statsChanges.listen((_) {
+      unawaited(_refresh());
+    });
+  }
+
+  @override
+  void dispose() {
+    _statsSubscription.cancel();
+    super.dispose();
   }
 
   Future<void> _refresh() async {
+    if (!mounted) return;
     setState(() {
       _future = _readingRepository.fetchStats();
     });
+  }
+
+  Future<void> _openReader() async {
+    await widget.onOpenReader();
   }
 
   String _formatReadTime(int seconds) {
@@ -1465,7 +1507,7 @@ class _ReaderDashboardSectionState extends State<_ReaderDashboardSection> {
           weeklyGoalText:
               '${(goalProgress * 100).clamp(0, 100).toStringAsFixed(0)}% of weekly goal',
           formatReadTime: _formatReadTime,
-          onTap: widget.onOpenReader,
+          onTap: _openReader,
         );
       },
     );
@@ -1910,9 +1952,409 @@ class _ReaderMetric extends StatelessWidget {
   }
 }
 
+class _BudgetDashboardSection extends StatefulWidget {
+  const _BudgetDashboardSection({super.key, required this.onOpenBudget});
+
+  final Future<void> Function() onOpenBudget;
+
+  @override
+  State<_BudgetDashboardSection> createState() =>
+      _BudgetDashboardSectionState();
+}
+
+class _BudgetDashboardSectionState extends State<_BudgetDashboardSection> {
+  final BudgetingRepository _repository = BudgetingRepository.instance;
+  late Future<BudgetMonthlySummary> _future;
+  late final StreamSubscription<void> _changesSubscription;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _repository.fetchMonthlySummary();
+    _changesSubscription = BudgetingRepository.changes.listen((_) {
+      unawaited(_refresh());
+    });
+  }
+
+  @override
+  void dispose() {
+    _changesSubscription.cancel();
+    super.dispose();
+  }
+
+  Future<void> _refresh() async {
+    if (!mounted) return;
+    final future = _repository.fetchMonthlySummary();
+    setState(() {
+      _future = future;
+    });
+    await future;
+  }
+
+  Future<void> _openBudget() async {
+    await widget.onOpenBudget();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FutureBuilder<BudgetMonthlySummary>(
+      future: _future,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            height: 252,
+            decoration: BoxDecoration(
+              color: AppPalette.isDark(context)
+                  ? const Color(0xFF172338)
+                  : Colors.grey[200],
+              borderRadius: BorderRadius.circular(16),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          final isDark = AppPalette.isDark(context);
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF361920) : Colors.red[50],
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isDark ? const Color(0xFF7F3340) : Colors.red[100]!,
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline_rounded, color: Colors.red),
+                const SizedBox(width: 12),
+                const Expanded(child: Text('Could not load budget summary.')),
+                TextButton(onPressed: _refresh, child: const Text('Retry')),
+              ],
+            ),
+          );
+        }
+
+        return _BudgetSummaryCard(
+          summary: snapshot.requireData,
+          onOpenBudget: _openBudget,
+        );
+      },
+    );
+  }
+}
+
+class _BudgetSummaryCard extends StatelessWidget {
+  const _BudgetSummaryCard({required this.summary, required this.onOpenBudget});
+
+  final BudgetMonthlySummary summary;
+  final VoidCallback onOpenBudget;
+
+  String _money(double amount) {
+    return NumberFormat.currency(
+      symbol: '${summary.currencyCode} ',
+      decimalDigits: amount == amount.roundToDouble() ? 0 : 2,
+    ).format(amount);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = AppPalette.isDark(context);
+    final textColor = Theme.of(context).colorScheme.onSurface;
+    final mutedColor = AppPalette.mutedText(context);
+    final incomeColor = isDark
+        ? const Color(0xFF65D6A6)
+        : const Color(0xFF168A61);
+    final expenseColor = isDark
+        ? const Color(0xFFFF8178)
+        : const Color(0xFFD94C49);
+    final balanceColor = summary.balance < 0
+        ? expenseColor
+        : (isDark ? const Color(0xFF9AA8FF) : const Color(0xFF4056C7));
+    final cardColor = isDark ? const Color(0xFF171D26) : Colors.white;
+    final borderColor = isDark
+        ? Colors.white.withValues(alpha: 0.08)
+        : const Color(0xFFE1E4EC);
+    final totalFlow = summary.income + summary.expense;
+    final incomeFlex = totalFlow <= 0
+        ? 0
+        : math.max(1, ((summary.income / totalFlow) * 1000).round());
+    final expenseFlex = totalFlow <= 0
+        ? 0
+        : math.max(1, ((summary.expense / totalFlow) * 1000).round());
+
+    return InkWell(
+      onTap: onOpenBudget,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+        decoration: BoxDecoration(
+          color: cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: borderColor),
+          boxShadow: [
+            BoxShadow(
+              color: isDark
+                  ? Colors.black.withValues(alpha: 0.28)
+                  : Colors.black.withValues(alpha: 0.08),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Monthly Budget',
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        DateFormat('MMMM yyyy').format(summary.month),
+                        style: TextStyle(
+                          color: mutedColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: onOpenBudget,
+                  style: TextButton.styleFrom(
+                    foregroundColor: balanceColor,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    minimumSize: const Size(0, 32),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  icon: const Icon(
+                    Icons.account_balance_wallet_rounded,
+                    size: 16,
+                  ),
+                  label: const Text(
+                    'Open Budget',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 22),
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: balanceColor.withValues(alpha: isDark ? 0.16 : 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    summary.balance < 0
+                        ? Icons.trending_down_rounded
+                        : Icons.trending_up_rounded,
+                    color: balanceColor,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 13),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Current Balance',
+                        style: TextStyle(
+                          color: mutedColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _money(summary.balance),
+                          maxLines: 1,
+                          style: TextStyle(
+                            color: balanceColor,
+                            fontSize: 28,
+                            height: 1,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 20),
+            Divider(height: 1, color: borderColor),
+            const SizedBox(height: 16),
+            IntrinsicHeight(
+              child: Row(
+                children: [
+                  Expanded(
+                    child: _BudgetMetric(
+                      icon: Icons.south_west_rounded,
+                      label: 'Total Income',
+                      value: _money(summary.income),
+                      color: incomeColor,
+                    ),
+                  ),
+                  VerticalDivider(width: 24, color: borderColor),
+                  Expanded(
+                    child: _BudgetMetric(
+                      icon: Icons.north_east_rounded,
+                      label: 'Total Expense',
+                      value: _money(summary.expense),
+                      color: expenseColor,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                Text(
+                  'Monthly cash flow',
+                  style: TextStyle(
+                    color: mutedColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const Spacer(),
+                Icon(
+                  summary.balance < 0
+                      ? Icons.info_outline_rounded
+                      : Icons.check_circle_outline_rounded,
+                  color: balanceColor,
+                  size: 14,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  summary.balance < 0
+                      ? 'Expenses exceed income'
+                      : 'Positive balance',
+                  style: TextStyle(
+                    color: balanceColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: SizedBox(
+                height: 8,
+                child: totalFlow <= 0
+                    ? ColoredBox(
+                        color: isDark
+                            ? const Color(0xFF303642)
+                            : const Color(0xFFE8EBF1),
+                      )
+                    : Row(
+                        children: [
+                          if (summary.income > 0)
+                            Expanded(
+                              flex: incomeFlex,
+                              child: ColoredBox(color: incomeColor),
+                            ),
+                          if (summary.expense > 0)
+                            Expanded(
+                              flex: expenseFlex,
+                              child: ColoredBox(color: expenseColor),
+                            ),
+                        ],
+                      ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _BudgetMetric extends StatelessWidget {
+  const _BudgetMetric({
+    required this.icon,
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final mutedColor = AppPalette.mutedText(context);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, color: color, size: 19),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: mutedColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 6),
+              FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  value,
+                  maxLines: 1,
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // Added this section for separating the Habit ---->
 class _HabitsDashboardSection extends StatefulWidget {
-  const _HabitsDashboardSection({required this.onOpenHabits});
+  const _HabitsDashboardSection({super.key, required this.onOpenHabits});
 
   final VoidCallback onOpenHabits;
 
@@ -1959,24 +2401,20 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
         todayDone: {},
         weekDone: {},
         dayCompletion: {},
+        dayCompletedUnits: {},
+        dayTargetUnits: {},
       );
     }
 
     final habitsRows = await supabase
         .from('habits')
-        .select('id, name, frequency_per_day')
+        .select('*')
         .eq('user_id', user.id)
         .isFilter('archived_at', null)
         .order('created_at');
 
     final habits = (habitsRows as List)
-        .map(
-          (r) => _Habit(
-            id: r['id'].toString(),
-            name: (r['name'] ?? '').toString(),
-            frequencyPerDay: (r['frequency_per_day'] as num?)?.toInt() ?? 1,
-          ),
-        )
+        .map((row) => Habit.fromMap(row as Map<String, dynamic>))
         .toList();
 
     if (habits.isEmpty) {
@@ -1985,6 +2423,8 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
         todayDone: {},
         weekDone: {},
         dayCompletion: {},
+        dayCompletedUnits: {},
+        dayTargetUnits: {},
       );
     }
 
@@ -2014,7 +2454,7 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
 
     final entriesRows = await supabase
         .from('habit_entries')
-        .select('habit_id, entry_date, done_count')
+        .select('*')
         .inFilter('habit_id', habitIds)
         .gte('entry_date', start28Str)
         .lte('entry_date', todayStr);
@@ -2022,16 +2462,10 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
     final Map<String, int> todayDone = {};
     final Map<String, int> weekDone = {};
 
-    // date -> (habit_id -> done_count)
-    final Map<String, Map<String, int>> doneByDate = {};
-
     for (final e in (entriesRows as List)) {
       final hid = e['habit_id'].toString();
       final d = e['entry_date'].toString(); // YYYY-MM-DD
       final done = (e['done_count'] as num?)?.toInt() ?? 0;
-
-      doneByDate.putIfAbsent(d, () => {});
-      doneByDate[d]![hid] = done;
 
       if (d == todayStr) {
         todayDone[hid] = done;
@@ -2041,33 +2475,22 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
       }
     }
 
-    // compute dayCompletion for last 28 days
-    final Map<String, double> dayCompletion = {};
-    final habitFreq = {for (final h in habits) h.id: h.frequencyPerDay};
-
-    for (int i = 0; i < 28; i++) {
-      final day = DateTime(
-        now.year,
-        now.month,
-        now.day,
-      ).subtract(Duration(days: 27 - i));
-      final ds = day.toIso8601String().split('T').first;
-
-      int completed = 0;
-      for (final h in habits) {
-        final done = doneByDate[ds]?[h.id] ?? 0;
-        if (done >= (habitFreq[h.id] ?? 1)) completed++;
-      }
-
-      final total = habits.isEmpty ? 0 : habits.length;
-      dayCompletion[ds] = total == 0 ? 0.0 : (completed / total);
-    }
+    final entries = (entriesRows as List)
+        .map((row) => HabitEntry.fromMap(row as Map<String, dynamic>))
+        .toList();
+    final performance = HabitPerformanceCalculator.calculate(
+      habits: habits,
+      entries: entries,
+      today: now,
+    );
 
     return _HabitsDashboardData(
       habits: habits,
       todayDone: todayDone,
       weekDone: weekDone,
-      dayCompletion: dayCompletion,
+      dayCompletion: performance.completionByDay,
+      dayCompletedUnits: performance.completedUnitsByDay,
+      dayTargetUnits: performance.targetUnitsByDay,
     );
   }
 
@@ -2083,6 +2506,12 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
       await refresh();
       return;
     }
+
+    final entryDay = DateTime.parse(entryDate);
+    final habit = _cache!.habits
+        .where((item) => item.id == habitId)
+        .firstOrNull;
+    if (habit == null || !habit.isScheduledOn(entryDay)) return;
 
     final oldToday = _cache!.todayDone[habitId] ?? 0;
     final oldWeek = _cache!.weekDone[habitId] ?? 0;
@@ -2107,20 +2536,26 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
         now.day,
       ).toIso8601String().split('T').first;
 
-      int completedCount = 0;
-      for (final h in _cache!.habits) {
-        final done = (h.id == habitId) ? newToday : (newTodayDone[h.id] ?? 0);
-        if (done >= h.frequencyPerDay) completedCount++;
-      }
-
-      final totalHabits = _cache!.habits.isEmpty ? 0 : _cache!.habits.length;
-      final todayFraction = totalHabits == 0
+      final todayUnits = _performanceUnitsForDay(
+        habits: _cache!.habits,
+        doneByHabit: newTodayDone,
+        date: now,
+      );
+      final todayFraction = todayUnits.target == 0
           ? 0.0
-          : (completedCount / totalHabits);
+          : todayUnits.completed / todayUnits.target;
 
       final newDayCompletion = {
         ..._cache!.dayCompletion,
         todayKey: todayFraction,
+      };
+      final newDayCompletedUnits = {
+        ..._cache!.dayCompletedUnits,
+        todayKey: todayUnits.completed,
+      };
+      final newDayTargetUnits = {
+        ..._cache!.dayTargetUnits,
+        todayKey: todayUnits.target,
       };
 
       _cache = _HabitsDashboardData(
@@ -2128,6 +2563,8 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
         todayDone: newTodayDone,
         weekDone: newWeekDone,
         dayCompletion: newDayCompletion,
+        dayCompletedUnits: newDayCompletedUnits,
+        dayTargetUnits: newDayTargetUnits,
       );
     });
 
@@ -2170,22 +2607,26 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
           now.day,
         ).toIso8601String().split('T').first;
 
-        int completedCount = 0;
-        for (final h in _cache!.habits) {
-          final done = (h.id == habitId)
-              ? oldToday
-              : (rolledTodayDone[h.id] ?? 0);
-          if (done >= h.frequencyPerDay) completedCount++;
-        }
-
-        final totalHabits = _cache!.habits.isEmpty ? 0 : _cache!.habits.length;
-        final todayFraction = totalHabits == 0
+        final todayUnits = _performanceUnitsForDay(
+          habits: _cache!.habits,
+          doneByHabit: rolledTodayDone,
+          date: now,
+        );
+        final todayFraction = todayUnits.target == 0
             ? 0.0
-            : (completedCount / totalHabits);
+            : todayUnits.completed / todayUnits.target;
 
         final rolledDayCompletion = {
           ..._cache!.dayCompletion,
           todayKey: todayFraction,
+        };
+        final rolledDayCompletedUnits = {
+          ..._cache!.dayCompletedUnits,
+          todayKey: todayUnits.completed,
+        };
+        final rolledDayTargetUnits = {
+          ..._cache!.dayTargetUnits,
+          todayKey: todayUnits.target,
         };
 
         _cache = _HabitsDashboardData(
@@ -2193,6 +2634,8 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
           todayDone: rolledTodayDone,
           weekDone: rolledWeekDone,
           dayCompletion: rolledDayCompletion,
+          dayCompletedUnits: rolledDayCompletedUnits,
+          dayTargetUnits: rolledDayTargetUnits,
         );
       });
 
@@ -2208,6 +2651,21 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
         _pendingSaves = (_pendingSaves - 1).clamp(0, 999999);
       });
     }
+  }
+
+  ({int completed, int target}) _performanceUnitsForDay({
+    required List<Habit> habits,
+    required Map<String, int> doneByHabit,
+    required DateTime date,
+  }) {
+    var completed = 0;
+    var target = 0;
+    for (final habit in habits) {
+      if (!habit.isScheduledOn(date)) continue;
+      target += habit.frequencyPerDay;
+      completed += (doneByHabit[habit.id] ?? 0).clamp(0, habit.frequencyPerDay);
+    }
+    return (completed: completed, target: target);
   }
 
   Widget _miniCircleButton({required IconData icon, VoidCallback? onTap}) {
@@ -2294,9 +2752,10 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
             ...data.habits.map((h) {
               final done = data.todayDone[h.id] ?? 0;
               final max = h.frequencyPerDay;
+              final scheduledToday = h.isScheduledOn(now);
 
-              final canAdd = done < max;
-              final canRemove = done > 0;
+              final canAdd = scheduledToday && done < max;
+              final canRemove = scheduledToday && done > 0;
 
               return Padding(
                 padding: const EdgeInsets.symmetric(vertical: 6),
@@ -2309,13 +2768,23 @@ class _HabitsDashboardSectionState extends State<_HabitsDashboardSection> {
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                    Text(
-                      "$done/$max",
-                      style: TextStyle(
-                        color: AppPalette.mutedText(context),
-                        fontWeight: FontWeight.w600,
+                    if (scheduledToday)
+                      Text(
+                        "$done/$max",
+                        style: TextStyle(
+                          color: AppPalette.mutedText(context),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      )
+                    else
+                      Text(
+                        "Off today",
+                        style: TextStyle(
+                          color: AppPalette.mutedText(context),
+                          fontWeight: FontWeight.w500,
+                          fontSize: 12,
+                        ),
                       ),
-                    ),
                     const SizedBox(width: 10),
                     _miniCircleButton(
                       icon: Icons.remove,

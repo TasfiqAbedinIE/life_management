@@ -100,7 +100,7 @@ Deno.serve(async (req) => {
             body: pill.message,
           },
           data: {
-            destination: "coupled",
+            destination: "love_pills",
             type: "love_pill",
             pill_id: pill.id,
             couple_id: pill.couple_id,

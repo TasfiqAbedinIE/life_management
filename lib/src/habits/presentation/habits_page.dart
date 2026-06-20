@@ -114,6 +114,7 @@ class _HabitsPageState extends State<HabitsPage> {
       builder: (_) => _AddHabitSheet(
         initialName: habit.name,
         initialFrequency: habit.frequencyPerDay,
+        initialWeekdays: habit.scheduledWeekdays,
         initialColorHex: habit.colorHex,
         title: 'Edit Habit',
         buttonText: 'Update habit',
@@ -126,6 +127,7 @@ class _HabitsPageState extends State<HabitsPage> {
       habitId: habit.id,
       name: result['name'] as String,
       frequencyPerDay: result['frequency'] as int,
+      scheduledWeekdays: (result['weekdays'] as List).cast<int>(),
       colorHex: result['color'] as String?,
     );
 
@@ -152,6 +154,7 @@ class _HabitsPageState extends State<HabitsPage> {
         // user_id: userId,
         name: result['name'] as String,
         frequencyPerDay: result['frequency'] as int,
+        scheduledWeekdays: (result['weekdays'] as List).cast<int>(),
         colorHex: result['color'] as String?,
       );
       setState(() {
@@ -206,6 +209,7 @@ class _HabitsPageState extends State<HabitsPage> {
 class _AddHabitSheet extends StatefulWidget {
   final String? initialName;
   final int? initialFrequency;
+  final List<int>? initialWeekdays;
   final String? initialColorHex;
 
   final String title;
@@ -214,6 +218,7 @@ class _AddHabitSheet extends StatefulWidget {
   const _AddHabitSheet({
     this.initialName,
     this.initialFrequency,
+    this.initialWeekdays,
     this.initialColorHex,
     this.title = 'New Habit',
     this.buttonText = 'Save habit',
@@ -228,6 +233,7 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
   late final TextEditingController _nameCtrl;
 
   late int _frequency;
+  late Set<int> _selectedWeekdays;
   String? _selectedColorHex;
 
   @override
@@ -235,6 +241,7 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
     super.initState();
     _nameCtrl = TextEditingController(text: widget.initialName ?? '');
     _frequency = widget.initialFrequency ?? 1;
+    _selectedWeekdays = (widget.initialWeekdays ?? Habit.allWeekdays).toSet();
     _selectedColorHex = widget.initialColorHex;
   }
 
@@ -249,6 +256,7 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
     Navigator.of(context).pop({
       'name': _nameCtrl.text.trim(),
       'frequency': _frequency,
+      'weekdays': (_selectedWeekdays.toList()..sort()),
       'color': _selectedColorHex,
     });
   }
@@ -316,6 +324,39 @@ class _AddHabitSheetState extends State<_AddHabitSheet> {
                     onPressed: () => setState(() => _frequency++),
                   ),
                 ],
+              ),
+              Text('Days of the week', style: theme.textTheme.bodyMedium),
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children:
+                    const [
+                      'Mon',
+                      'Tue',
+                      'Wed',
+                      'Thu',
+                      'Fri',
+                      'Sat',
+                      'Sun',
+                    ].asMap().entries.map((entry) {
+                      final weekday = entry.key + 1;
+                      return FilterChip(
+                        label: Text(entry.value),
+                        selected: _selectedWeekdays.contains(weekday),
+                        onSelected: (selected) {
+                          if (!selected && _selectedWeekdays.length == 1) {
+                            return;
+                          }
+                          setState(() {
+                            if (selected) {
+                              _selectedWeekdays.add(weekday);
+                            } else {
+                              _selectedWeekdays.remove(weekday);
+                            }
+                          });
+                        },
+                      );
+                    }).toList(),
               ),
               Text('Color', style: theme.textTheme.bodyMedium),
               Row(

@@ -5,7 +5,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../coupled/couple_repository.dart';
 import '../coupled/coupled_request_page.dart';
+import '../coupled/love_pill_page.dart';
+import 'habit_notification_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -22,6 +25,7 @@ class PushNotificationService {
   static GlobalKey<NavigatorState>? _navigatorKey;
   static StreamSubscription<AuthState>? _authSubscription;
   static StreamSubscription<String>? _tokenRefreshSubscription;
+  static StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
   static StreamSubscription<RemoteMessage>? _messageOpenedSubscription;
   static bool _initialized = false;
 
@@ -50,6 +54,9 @@ class PushNotificationService {
 
     _messageOpenedSubscription = FirebaseMessaging.onMessageOpenedApp.listen(
       _handleMessageNavigation,
+    );
+    _foregroundMessageSubscription = FirebaseMessaging.onMessage.listen(
+      _showForegroundLovePill,
     );
 
     final initialMessage = await messaging.getInitialMessage();
@@ -80,21 +87,49 @@ class PushNotificationService {
     }, onConflict: 'token');
   }
 
-  static void _handleMessageNavigation(RemoteMessage message) {
+  static Future<void> _showForegroundLovePill(RemoteMessage message) async {
+    if (message.data['type'] != 'love_pill') return;
+
+    final allowed =
+        await HabitNotificationService.areNotificationsAllowed() ||
+        await HabitNotificationService.requestPermission();
+    if (!allowed) return;
+
+    await HabitNotificationService.showCouplePillNotification(
+      title: message.notification?.title ?? 'New love pill',
+      message:
+          message.notification?.body ??
+          message.data['message'] ??
+          'Your better half sent you something sweet.',
+    );
+  }
+
+  static Future<void> _handleMessageNavigation(RemoteMessage message) async {
     final destination = message.data['destination'];
-    if (destination != 'coupled') return;
+    final isLovePill =
+        destination == 'love_pills' || message.data['type'] == 'love_pill';
+    if (destination != 'coupled' && !isLovePill) return;
+
+    Widget page = const CoupledRequestPage();
+    if (isLovePill) {
+      final repo = CoupleRepository(Supabase.instance.client);
+      final couple = await repo.fetchExistingCouple();
+      final coupleId = couple?['id']?.toString();
+      if (couple?['status'] == 'active' && coupleId != null) {
+        page = LovePillPage(coupleId: coupleId, repo: repo);
+      }
+    }
 
     final navigator = _navigatorKey?.currentState;
     if (navigator == null) return;
 
-    navigator.push(
-      MaterialPageRoute(builder: (_) => const CoupledRequestPage()),
-    );
+    navigator.push(MaterialPageRoute(builder: (_) => page));
   }
 
   static Future<void> dispose() async {
     await _authSubscription?.cancel();
     await _tokenRefreshSubscription?.cancel();
+    await _foregroundMessageSubscription?.cancel();
     await _messageOpenedSubscription?.cancel();
     _initialized = false;
   }

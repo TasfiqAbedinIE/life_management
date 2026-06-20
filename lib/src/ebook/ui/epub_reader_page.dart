@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_epub_viewer/flutter_epub_viewer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class EpubReaderPage extends StatefulWidget {
   const EpubReaderPage({
@@ -44,10 +45,12 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
   Timer? _resumeSaveTimer;
   Offset? _touchDownPoint;
 
+  String get _resumeUserScope =>
+      Supabase.instance.client.auth.currentUser?.id ?? 'signed_out';
   String get _resumeCfiKey =>
-      'epub_resume_cfi_${widget.resumeKey ?? widget.title}';
+      'epub_resume_cfi_${_resumeUserScope}_${widget.resumeKey ?? widget.title}';
   String get _resumeProgressKey =>
-      'epub_resume_progress_${widget.resumeKey ?? widget.title}';
+      'epub_resume_progress_${_resumeUserScope}_${widget.resumeKey ?? widget.title}';
 
   @override
   void initState() {

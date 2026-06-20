@@ -128,16 +128,22 @@ class HabitWidgetService {
         name: habit.name,
         done: done,
         target: habit.frequencyPerDay,
+        enabled: habit.isScheduledOn(DateTime.now()),
         colorHex: habit.colorHex ?? _fallbackColorFor(habit.name),
       );
     }).toList();
 
-    final totalCompleted = resolvedHabits.where((habit) {
+    final scheduledToday = resolvedHabits.where(
+      (habit) => habit.isScheduledOn(DateTime.now()),
+    );
+    final totalCompleted = scheduledToday.where((habit) {
       final done = _todayDone(entriesMap[habit.id] ?? [], todayKey);
       return done >= habit.frequencyPerDay;
     }).length;
 
-    final summary = '$totalCompleted of ${resolvedHabits.length} habits complete';
+    final summary = scheduledToday.isEmpty
+        ? 'No habits scheduled today'
+        : '$totalCompleted of ${scheduledToday.length} scheduled habits complete';
 
     await HomeWidget.saveWidgetData<String>('habit_widget_date', todayKey);
     await HomeWidget.saveWidgetData<String>('habit_widget_summary', summary);
@@ -166,6 +172,10 @@ class HabitWidgetService {
         'habit_row_${index}_color',
         row?.colorHex ?? '#6D7CFF',
       );
+      await HomeWidget.saveWidgetData<bool>(
+        'habit_row_${index}_enabled',
+        row?.enabled ?? false,
+      );
     }
 
     await _updateWidget();
@@ -179,7 +189,10 @@ class HabitWidgetService {
       'No habits yet',
     );
     await HomeWidget.saveWidgetData<int>('habit_widget_total', 0);
-    await HomeWidget.saveWidgetData<String>('habit_widget_empty_message', message);
+    await HomeWidget.saveWidgetData<String>(
+      'habit_widget_empty_message',
+      message,
+    );
 
     for (var index = 0; index < _maxVisibleHabits; index++) {
       await HomeWidget.saveWidgetData<String>('habit_row_${index}_id', '');
@@ -189,6 +202,10 @@ class HabitWidgetService {
       await HomeWidget.saveWidgetData<String>(
         'habit_row_${index}_color',
         '#6D7CFF',
+      );
+      await HomeWidget.saveWidgetData<bool>(
+        'habit_row_${index}_enabled',
+        false,
       );
     }
 
@@ -229,13 +246,7 @@ class HabitWidgetService {
   }
 
   static String _fallbackColorFor(String input) {
-    const palette = [
-      '#FF7A59',
-      '#F7B500',
-      '#00B894',
-      '#3B82F6',
-      '#7C5CFF',
-    ];
+    const palette = ['#FF7A59', '#F7B500', '#00B894', '#3B82F6', '#7C5CFF'];
 
     final hash = input.codeUnits.fold<int>(0, (sum, char) => sum + char);
     return palette[hash % palette.length];
@@ -253,6 +264,7 @@ class _HabitWidgetRow {
   final String name;
   final int done;
   final int target;
+  final bool enabled;
   final String colorHex;
 
   const _HabitWidgetRow({
@@ -260,6 +272,7 @@ class _HabitWidgetRow {
     required this.name,
     required this.done,
     required this.target,
+    required this.enabled,
     required this.colorHex,
   });
 }

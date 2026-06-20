@@ -14,13 +14,10 @@ import androidx.core.graphics.drawable.toBitmap
 import java.util.Calendar
 
 object HabitReminderScheduler {
-    const val DEFAULT_START_MINUTES = 11 * 60
-    const val DEFAULT_INTERVAL_HOURS = 8
+    private val reminderMinutes = intArrayOf(8 * 60, 16 * 60, 22 * 60)
 
     private const val prefsName = "FlutterSharedPreferences"
     private const val enabledKey = "flutter.habit_notifications_enabled"
-    private const val startMinutesKey = "flutter.habit_notifications_start_minutes"
-    private const val intervalHoursKey = "flutter.habit_notifications_interval_hours"
     private const val nextTriggerAtKey = "habit_notifications_next_trigger_at"
 
     private const val channelId = "habit_record_reminders"
@@ -34,9 +31,10 @@ object HabitReminderScheduler {
     const val EXTRA_DESTINATION = "destination"
     const val DESTINATION_HABITS = "habits"
     const val DESTINATION_COUPLED = "coupled"
+    const val DESTINATION_LOVE_PILLS = "love_pills"
 
-    fun configure(context: Context, enabled: Boolean, startMinutes: Int, intervalHours: Int) {
-        saveSettings(context, enabled, startMinutes, intervalHours)
+    fun configure(context: Context, enabled: Boolean) {
+        saveSettings(context, enabled)
         if (enabled) {
             scheduleNext(context)
         } else {
@@ -51,11 +49,7 @@ object HabitReminderScheduler {
             return
         }
 
-        val nextTriggerAt = computeNextTriggerAt(
-            nowMillis = fromTimeMillis,
-            startMinutes = settings.startMinutes,
-            intervalHours = settings.intervalHours
-        )
+        val nextTriggerAt = computeNextTriggerAt(fromTimeMillis)
 
         val alarmManager = context.getSystemService(Context.ALARM_SERVICE) as AlarmManager
         val pendingIntent = reminderPendingIntent(context, nextTriggerAt)
@@ -147,21 +141,17 @@ object HabitReminderScheduler {
         NotificationManagerCompat.from(context).notify(notificationId, notification)
     }
 
-    private fun saveSettings(context: Context, enabled: Boolean, startMinutes: Int, intervalHours: Int) {
+    private fun saveSettings(context: Context, enabled: Boolean) {
         context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
             .edit()
             .putBoolean(enabledKey, enabled)
-            .putInt(startMinutesKey, startMinutes)
-            .putInt(intervalHoursKey, intervalHours.coerceIn(1, 24))
             .apply()
     }
 
     private fun readSettings(context: Context): ReminderSettings {
         val prefs = context.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
         return ReminderSettings(
-            enabled = prefs.getBoolean(enabledKey, false),
-            startMinutes = prefs.getInt(startMinutesKey, DEFAULT_START_MINUTES),
-            intervalHours = prefs.getInt(intervalHoursKey, DEFAULT_INTERVAL_HOURS).coerceIn(1, 24)
+            enabled = prefs.getBoolean(enabledKey, false)
         )
     }
 
@@ -178,26 +168,29 @@ object HabitReminderScheduler {
         )
     }
 
-    private fun computeNextTriggerAt(
-        nowMillis: Long,
-        startMinutes: Int,
-        intervalHours: Int
-    ): Long {
-        val intervalMillis = intervalHours.coerceIn(1, 24) * 60L * 60L * 1000L
-        val calendar = Calendar.getInstance().apply {
+    private fun computeNextTriggerAt(nowMillis: Long): Long {
+        for (minutes in reminderMinutes) {
+            val candidate = Calendar.getInstance().apply {
+                timeInMillis = nowMillis
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+                set(Calendar.HOUR_OF_DAY, minutes / 60)
+                set(Calendar.MINUTE, minutes % 60)
+            }.timeInMillis
+
+            if (candidate > nowMillis) {
+                return candidate
+            }
+        }
+
+        return Calendar.getInstance().apply {
             timeInMillis = nowMillis
+            add(Calendar.DAY_OF_YEAR, 1)
             set(Calendar.SECOND, 0)
             set(Calendar.MILLISECOND, 0)
-            set(Calendar.HOUR_OF_DAY, startMinutes / 60)
-            set(Calendar.MINUTE, startMinutes % 60)
-        }
-
-        var candidate = calendar.timeInMillis
-        while (candidate <= nowMillis) {
-            candidate += intervalMillis
-        }
-
-        return candidate
+            set(Calendar.HOUR_OF_DAY, reminderMinutes.first() / 60)
+            set(Calendar.MINUTE, reminderMinutes.first() % 60)
+        }.timeInMillis
     }
 
     private fun createNotificationChannel(context: Context) {
@@ -219,9 +212,5 @@ object HabitReminderScheduler {
         manager.createNotificationChannel(channel)
     }
 
-    private data class ReminderSettings(
-        val enabled: Boolean,
-        val startMinutes: Int,
-        val intervalHours: Int
-    )
+    private data class ReminderSettings(val enabled: Boolean)
 }

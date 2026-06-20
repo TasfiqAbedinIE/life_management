@@ -27,14 +27,10 @@ class MainActivity : FlutterActivity() {
             when (call.method) {
                 "configureHabitNotifications" -> {
                     val enabled = call.argument<Boolean>("enabled") ?: false
-                    val startMinutes = call.argument<Int>("startMinutes") ?: HabitReminderScheduler.DEFAULT_START_MINUTES
-                    val intervalHours = call.argument<Int>("intervalHours") ?: HabitReminderScheduler.DEFAULT_INTERVAL_HOURS
 
                     HabitReminderScheduler.configure(
                         context = applicationContext,
-                        enabled = enabled,
-                        startMinutes = startMinutes,
-                        intervalHours = intervalHours
+                        enabled = enabled
                     )
                     result.success(null)
                 }
@@ -95,7 +91,8 @@ class MainActivity : FlutterActivity() {
         val destination = intent?.getStringExtra(HabitReminderScheduler.EXTRA_DESTINATION)
         if (
             destination == HabitReminderScheduler.DESTINATION_HABITS ||
-            destination == HabitReminderScheduler.DESTINATION_COUPLED
+            destination == HabitReminderScheduler.DESTINATION_COUPLED ||
+            destination == HabitReminderScheduler.DESTINATION_LOVE_PILLS
         ) {
             pendingLaunchDestination = destination
         }

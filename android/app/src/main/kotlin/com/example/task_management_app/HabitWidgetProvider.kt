@@ -115,6 +115,7 @@ class HabitWidgetProvider : HomeWidgetProvider() {
         val name = widgetData.getString("habit_row_${index}_name", "") ?: ""
         val done = widgetData.getInt("habit_row_${index}_done", 0)
         val target = widgetData.getInt("habit_row_${index}_target", 0)
+        val enabled = widgetData.getBoolean("habit_row_${index}_enabled", true)
         val color = widgetData.getString("habit_row_${index}_color", "#6D7CFF") ?: "#6D7CFF"
         val visible = id.isNotEmpty() && target > 0
 
@@ -125,6 +126,16 @@ class HabitWidgetProvider : HomeWidgetProvider() {
         views.setTextViewText(countId, "$done/$target")
         views.setProgressBar(progressId, target, done.coerceAtMost(target), false)
         views.setInt(accentId, "setBackgroundColor", parseColor(color))
+        views.setBoolean(minusId, "setEnabled", enabled)
+        views.setBoolean(plusId, "setEnabled", enabled)
+        views.setFloat(minusId, "setAlpha", if (enabled) 1f else 0.35f)
+        views.setFloat(plusId, "setAlpha", if (enabled) 1f else 0.35f)
+
+        if (!enabled) {
+            views.setOnClickPendingIntent(minusId, null)
+            views.setOnClickPendingIntent(plusId, null)
+            return
+        }
 
         val decrementIntent = HomeWidgetBackgroundIntent.getBroadcast(
             context,

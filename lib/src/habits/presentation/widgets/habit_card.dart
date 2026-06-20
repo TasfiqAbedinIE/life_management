@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import '../../models/habit.dart';
 import '../../models/habit_entry.dart';
+import '../../models/habit_streak.dart';
 
 class HabitCard extends StatefulWidget {
   final Habit habit;
@@ -87,61 +88,6 @@ class _HabitCardState extends State<HabitCard>
     return 0;
   }
 
-  /// streak based on "full completion" days (done_count >= frequency)
-  (int current, int best) _computeStreaks() {
-    final now = DateTime.now();
-    final dateMap = <DateTime, bool>{};
-
-    for (int i = 0; i < 30; i++) {
-      final d = DateTime(
-        now.year,
-        now.month,
-        now.day,
-      ).subtract(Duration(days: i));
-      dateMap[d] = false;
-    }
-
-    for (final e in widget.entries) {
-      final d = DateTime(e.entryDate.year, e.entryDate.month, e.entryDate.day);
-      if (dateMap.containsKey(d)) {
-        dateMap[d] = e.doneCount >= widget.habit.frequencyPerDay;
-      }
-    }
-
-    int current = 0;
-    int best = 0;
-
-    for (int i = 0; i < 30; i++) {
-      final d = DateTime(
-        now.year,
-        now.month,
-        now.day,
-      ).subtract(Duration(days: i));
-      if (dateMap[d] == true) {
-        current++;
-      } else {
-        break;
-      }
-    }
-
-    int temp = 0;
-    for (int i = 0; i < 30; i++) {
-      final d = DateTime(
-        now.year,
-        now.month,
-        now.day,
-      ).subtract(Duration(days: i));
-      if (dateMap[d] == true) {
-        temp++;
-        if (temp > best) best = temp;
-      } else {
-        temp = 0;
-      }
-    }
-
-    return (current, best);
-  }
-
   Color _heatColor(Color base, int done, int target) {
     if (target <= 0) return base.withOpacity(0.10);
 
@@ -152,6 +98,7 @@ class _HabitCardState extends State<HabitCard>
   }
 
   Widget _buildHeatmap(BuildContext context, Color primary) {
+    final theme = Theme.of(context);
     final now = DateTime.now();
     final size = 14.0;
     final gap = 4.0;
@@ -176,12 +123,15 @@ class _HabitCardState extends State<HabitCard>
       runSpacing: gap,
       children: dates.map((d) {
         final done = doneMap[d] ?? 0;
+        final scheduled = widget.habit.isScheduledOn(d);
         return Container(
           width: size,
           height: size,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(4),
-            color: _heatColor(primary, done, widget.habit.frequencyPerDay),
+            color: scheduled
+                ? _heatColor(primary, done, widget.habit.frequencyPerDay)
+                : theme.disabledColor.withOpacity(0.08),
           ),
         );
       }).toList(),
@@ -217,8 +167,16 @@ class _HabitCardState extends State<HabitCard>
     final todayCount = _todayCount();
     final freq = widget.habit.frequencyPerDay;
     final isFullDone = todayCount >= freq;
+    final isScheduledToday = widget.habit.isScheduledOn(DateTime.now());
 
-    final (currentStreak, bestStreak) = _computeStreaks();
+    final streak = HabitStreakCalculator.calculate(
+      habit: widget.habit,
+      entries: widget.entries,
+    );
+    const weekdayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final schedule = widget.habit.scheduledWeekdays
+        .map((day) => weekdayLabels[day - 1])
+        .join(', ');
 
     // Dismissible supports swipe actions.
     // - Swipe right (startToEnd) => EDIT (do not dismiss)
@@ -293,7 +251,9 @@ class _HabitCardState extends State<HabitCard>
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Target: $freq / day',
+                        isScheduledToday
+                            ? '$schedule | Target: $freq / day'
+                            : '$schedule | Not scheduled today',
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.textTheme.bodySmall?.color?.withOpacity(
                             0.72,
@@ -307,7 +267,9 @@ class _HabitCardState extends State<HabitCard>
                 // Right: partial progress control
                 _MiniIconBtn(
                   icon: Icons.remove_rounded,
-                  onTap: todayCount > 0 ? widget.onDecrementToday : null,
+                  onTap: isScheduledToday && todayCount > 0
+                      ? widget.onDecrementToday
+                      : null,
                 ),
 
                 Container(
@@ -342,7 +304,9 @@ class _HabitCardState extends State<HabitCard>
 
                 _MiniIconBtn(
                   icon: Icons.add_rounded,
-                  onTap: todayCount < freq ? widget.onIncrementToday : null,
+                  onTap: isScheduledToday && todayCount < freq
+                      ? widget.onIncrementToday
+                      : null,
                 ),
 
                 IconButton(
@@ -373,13 +337,13 @@ class _HabitCardState extends State<HabitCard>
                               children: [
                                 _StatChip(
                                   label: 'Current streak',
-                                  value: '$currentStreak days',
+                                  value: '${streak.current} weeks',
                                   color: primary,
                                 ),
                                 const SizedBox(width: 8),
                                 _StatChip(
                                   label: 'Best streak',
-                                  value: '$bestStreak days',
+                                  value: '${streak.best} weeks',
                                   color: primary.withOpacity(0.85),
                                 ),
                               ],

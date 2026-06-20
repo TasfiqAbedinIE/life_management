@@ -255,10 +255,12 @@ class CoupleRepository {
   Future<List<Map<String, dynamic>>> fetchLovePills(String coupleId) async {
     final res = await _client
         .from('couple_love_pills')
-        .select('id, couple_id, sender_id, message, pill_type, created_at')
+        .select(
+          'id, couple_id, sender_id, message, pill_type, created_at, read_at',
+        )
         .eq('couple_id', coupleId)
         .order('created_at', ascending: false)
-        .limit(40);
+        .limit(100);
 
     if (res is List) {
       return res.map((e) => Map<String, dynamic>.from(e)).toList();
@@ -285,10 +287,67 @@ class CoupleRepository {
           'message': trimmed,
           'pill_type': pillType,
         })
-        .select('id, couple_id, sender_id, message, pill_type, created_at')
+        .select(
+          'id, couple_id, sender_id, message, pill_type, created_at, read_at',
+        )
         .single();
 
     return Map<String, dynamic>.from(inserted as Map);
+  }
+
+  Future<int> fetchUnreadLovePillCount(String coupleId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return 0;
+
+    final rows = await _client
+        .from('couple_love_pills')
+        .select('id')
+        .eq('couple_id', coupleId)
+        .neq('sender_id', user.id)
+        .isFilter('read_at', null);
+
+    return rows.length;
+  }
+
+  Future<void> markReceivedLovePillsRead(String coupleId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return;
+
+    await _client
+        .from('couple_love_pills')
+        .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+        .eq('couple_id', coupleId)
+        .neq('sender_id', user.id)
+        .isFilter('read_at', null);
+  }
+
+  Future<String> fetchLovePillBackground(String coupleId) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return 'blush';
+
+    final preference = await _client
+        .from('couple_love_pill_preferences')
+        .select('background_key')
+        .eq('couple_id', coupleId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+    return preference?['background_key']?.toString() ?? 'blush';
+  }
+
+  Future<void> saveLovePillBackground({
+    required String coupleId,
+    required String backgroundKey,
+  }) async {
+    final user = _client.auth.currentUser;
+    if (user == null) return;
+
+    await _client.from('couple_love_pill_preferences').upsert({
+      'couple_id': coupleId,
+      'user_id': user.id,
+      'background_key': backgroundKey,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    }, onConflict: 'couple_id,user_id');
   }
 
   // ===== SHOPPING LISTS =====

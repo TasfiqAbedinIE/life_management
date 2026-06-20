@@ -1,12 +1,35 @@
+import 'dart:async';
+
 import 'package:sqflite/sqflite.dart';
 
 import '../models/budgeting_models.dart';
 import 'budgeting_db.dart';
 
+class BudgetMonthlySummary {
+  const BudgetMonthlySummary({
+    required this.month,
+    required this.currencyCode,
+    required this.income,
+    required this.expense,
+  });
+
+  final DateTime month;
+  final String currencyCode;
+  final double income;
+  final double expense;
+
+  double get balance => income - expense;
+}
+
 class BudgetingRepository {
   BudgetingRepository._();
 
   static final BudgetingRepository instance = BudgetingRepository._();
+
+  static final StreamController<void> _changes =
+      StreamController<void>.broadcast();
+
+  static Stream<void> get changes => _changes.stream;
 
   Future<BudgetProfile> fetchProfile() async {
     final db = await BudgetingDB.instance.database;
@@ -31,6 +54,42 @@ class BudgetingRepository {
       'budget_profile',
       profile.copyWith(updatedAt: DateTime.now()).toMap(),
       conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+    _changes.add(null);
+  }
+
+  Future<BudgetMonthlySummary> fetchMonthlySummary([DateTime? forMonth]) async {
+    final month = forMonth ?? DateTime.now();
+    final monthStart = DateTime(month.year, month.month);
+    final nextMonthStart = DateTime(month.year, month.month + 1);
+    final db = await BudgetingDB.instance.database;
+    final profile = await fetchProfile();
+    final rows = await db.rawQuery(
+      '''
+      SELECT type, COALESCE(SUM(amount), 0) AS total
+      FROM budget_transactions
+      WHERE occurred_at >= ? AND occurred_at < ?
+      GROUP BY type
+      ''',
+      [monthStart.toIso8601String(), nextMonthStart.toIso8601String()],
+    );
+
+    var income = 0.0;
+    var expense = 0.0;
+    for (final row in rows) {
+      final total = (row['total'] as num?)?.toDouble() ?? 0;
+      if (row['type'] == BudgetTransactionType.income.value) {
+        income = total;
+      } else if (row['type'] == BudgetTransactionType.expense.value) {
+        expense = total;
+      }
+    }
+
+    return BudgetMonthlySummary(
+      month: monthStart,
+      currencyCode: profile.currencyCode,
+      income: income,
+      expense: expense,
     );
   }
 
@@ -146,11 +205,13 @@ class BudgetingRepository {
 
   Future<int> addTransaction(BudgetTransaction transaction) async {
     final db = await BudgetingDB.instance.database;
-    return db.insert(
+    final id = await db.insert(
       'budget_transactions',
       transaction.toMap()..remove('id'),
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
+    _changes.add(null);
+    return id;
   }
 
   Future<int> updateTransaction(BudgetTransaction transaction) async {
@@ -158,16 +219,24 @@ class BudgetingRepository {
     if (id == null) throw ArgumentError('Transaction id is null');
 
     final db = await BudgetingDB.instance.database;
-    return db.update(
+    final changed = await db.update(
       'budget_transactions',
       transaction.toMap()..remove('id'),
       where: 'id = ?',
       whereArgs: [id],
     );
+    if (changed > 0) _changes.add(null);
+    return changed;
   }
 
   Future<int> deleteTransaction(int id) async {
     final db = await BudgetingDB.instance.database;
-    return db.delete('budget_transactions', where: 'id = ?', whereArgs: [id]);
+    final changed = await db.delete(
+      'budget_transactions',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    if (changed > 0) _changes.add(null);
+    return changed;
   }
 }

@@ -6,6 +6,8 @@ import 'package:flutter_epub_viewer/flutter_epub_viewer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../data/ebook_dictionary_service.dart';
+
 class EpubReaderPage extends StatefulWidget {
   const EpubReaderPage({
     super.key,
@@ -33,6 +35,7 @@ class EpubReaderPage extends StatefulWidget {
 
 class _EpubReaderPageState extends State<EpubReaderPage> {
   final _controller = EpubController();
+  final _dictionaryService = EbookDictionaryService();
 
   double _currentProgress = 0.0;
   bool _showHud = true;
@@ -99,6 +102,18 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
     });
   }
 
+  Future<void> _clearSelection() async {
+    try {
+      await _controller.clearSelection();
+    } catch (_) {
+      // If the viewer has already torn down the selection internally,
+      // we still want to reset our local toolbar state.
+    }
+
+    if (!mounted) return;
+    setState(() => _selection = null);
+  }
+
   void _toggleHud() {
     if (!mounted) return;
     setState(() => _showHud = !_showHud);
@@ -111,13 +126,20 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
   void _handleViewerTouchUp(double x, double y) {
     final start = _touchDownPoint;
     _touchDownPoint = null;
-    if (_selection != null || start == null) return;
+    if (start == null) return;
 
     final delta = (start - Offset(x, y)).distance;
-    final inBottomTapZone = start.dy >= 0.70 && y >= 0.70;
     final looksLikeTap = delta <= 0.035;
+    if (!looksLikeTap) return;
 
-    if (looksLikeTap && inBottomTapZone) {
+    if (_selection != null) {
+      unawaited(_clearSelection());
+      return;
+    }
+
+    final inBottomTapZone = start.dy >= 0.70 && y >= 0.70;
+
+    if (inBottomTapZone) {
       _toggleHud();
     }
   }
@@ -227,8 +249,8 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
       color: color,
       opacity: 0.32,
     );
+    await _clearSelection();
     if (!mounted) return;
-    setState(() => _selection = null);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Highlight added.')),
     );
@@ -238,10 +260,39 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
     final selection = _selection;
     if (selection == null || selection.selectionCfi.isEmpty) return;
     _controller.addUnderline(cfi: selection.selectionCfi);
+    await _clearSelection();
     if (!mounted) return;
-    setState(() => _selection = null);
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Underline added.')),
+    );
+  }
+
+  Future<void> _defineSelection() async {
+    final selection = _selection;
+    if (selection == null) return;
+
+    final word = _dictionaryService.cleanSelectedWord(selection.selectedText);
+    if (word == null) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Select a single word to define.')),
+      );
+      return;
+    }
+
+    await _clearSelection();
+    if (!mounted) return;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (context) {
+        return _DictionaryBottomSheet(
+          word: word,
+          future: _dictionaryService.define(word),
+        );
+      },
     );
   }
 
@@ -307,6 +358,7 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
               setState(() {
                 _currentProgress = location.progress.clamp(0.0, 1.0).toDouble();
                 _resumeCfi = location.startCfi;
+                _selection = null;
               });
               _scheduleResumeSave();
             },
@@ -497,15 +549,11 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
                   color: const Color(0xFF38BDF8),
                   onTap: () => _applyMark(const Color(0xFF38BDF8)),
                 ),
+                _defineChip(onTap: _defineSelection),
                 _markChip(
                   label: 'Underline',
                   color: accent,
                   onTap: _applyUnderline,
-                ),
-                _markChip(
-                  label: 'Dismiss',
-                  color: Colors.white70,
-                  onTap: () => setState(() => _selection = null),
                 ),
               ],
             ),
@@ -557,6 +605,44 @@ class _EpubReaderPageState extends State<EpubReaderPage> {
       ),
     );
   }
+
+  Widget _defineChip({required VoidCallback onTap}) {
+    const color = Color(0xFF8B5CF6);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+        decoration: BoxDecoration(
+          color: color,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.20)),
+          boxShadow: [
+            BoxShadow(
+              color: color.withValues(alpha: 0.30),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: const Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.menu_book_rounded, color: Colors.white, size: 15),
+            SizedBox(width: 6),
+            Text(
+              'Define',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _SelectionState {
@@ -567,5 +653,165 @@ class _SelectionState {
 
   final String selectedText;
   final String selectionCfi;
+}
+
+class _DictionaryBottomSheet extends StatelessWidget {
+  const _DictionaryBottomSheet({
+    required this.word,
+    required this.future,
+  });
+
+  final String word;
+  final Future<DictionaryEntry> future;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final muted = isDark ? const Color(0xFFB9C6DD) : const Color(0xFF4B5563);
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(
+          18,
+          6,
+          18,
+          MediaQuery.of(context).viewInsets.bottom + 18,
+        ),
+        child: FutureBuilder<DictionaryEntry>(
+          future: future,
+          builder: (context, snapshot) {
+            Widget body;
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              body = const Padding(
+                padding: EdgeInsets.symmetric(vertical: 34),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            } else if (snapshot.hasError) {
+              body = Padding(
+                padding: const EdgeInsets.symmetric(vertical: 18),
+                child: Text(
+                  snapshot.error.toString(),
+                  style: TextStyle(color: muted, height: 1.35),
+                ),
+              );
+            } else {
+              final entry = snapshot.data!;
+              body = Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  for (var i = 0; i < entry.definitions.length; i++) ...[
+                    _DefinitionTile(
+                      index: i + 1,
+                      definition: entry.definitions[i],
+                    ),
+                    if (i != entry.definitions.length - 1)
+                      const SizedBox(height: 12),
+                  ],
+                ],
+              );
+            }
+
+            return SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    word,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Definition',
+                    style: TextStyle(
+                      color: muted,
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  body,
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _DefinitionTile extends StatelessWidget {
+  const _DefinitionTile({
+    required this.index,
+    required this.definition,
+  });
+
+  final int index;
+  final DictionaryDefinition definition;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final accent = Theme.of(context).colorScheme.primary;
+    final muted = isDark ? const Color(0xFFB9C6DD) : const Color(0xFF4B5563);
+    final example = definition.example;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withValues(alpha: 0.06)
+            : const Color(0xFFF4F7FB),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: isDark
+              ? Colors.white.withValues(alpha: 0.08)
+              : const Color(0xFFDCE4F2),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text(
+                '$index.',
+                style: TextStyle(
+                  color: accent,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                definition.partOfSpeech,
+                style: TextStyle(
+                  color: accent,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            definition.definition,
+            style: const TextStyle(height: 1.35, fontWeight: FontWeight.w600),
+          ),
+          if (example != null && example.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              example,
+              style: TextStyle(color: muted, height: 1.35),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
 }
 

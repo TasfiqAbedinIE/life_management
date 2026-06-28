@@ -597,7 +597,7 @@ class _LovePillAppBarButton extends StatelessWidget {
             backgroundColor: backgroundColor,
             foregroundColor: accentColor,
           ),
-          icon: const Icon(Icons.medication_liquid_rounded),
+          icon: const _LoveMessageIcon(),
         ),
         if (unreadCount > 0)
           Positioned(
@@ -631,6 +631,48 @@ class _LovePillAppBarButton extends StatelessWidget {
             ),
           ),
       ],
+    );
+  }
+}
+
+class _LoveMessageIcon extends StatelessWidget {
+  const _LoveMessageIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    final color = IconTheme.of(context).color ?? Colors.pink;
+
+    return SizedBox(
+      width: 26,
+      height: 26,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned(
+            left: 1,
+            top: 3,
+            child: Icon(
+              Icons.chat_bubble_rounded,
+              size: 22,
+              color: color.withValues(alpha: 0.92),
+            ),
+          ),
+          Positioned(
+            right: 0,
+            bottom: 1,
+            child: Container(
+              width: 15,
+              height: 15,
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.surface,
+                shape: BoxShape.circle,
+              ),
+              alignment: Alignment.center,
+              child: Icon(Icons.favorite_rounded, size: 12, color: color),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

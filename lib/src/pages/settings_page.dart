@@ -24,6 +24,7 @@ class _SettingsPageState extends State<SettingsPage> {
   TimeOfDay? _officeEnd;
   TimeOfDay? _personalStart;
   TimeOfDay? _personalEnd;
+  Set<int> _weekendDays = {6, 7};
 
   bool _habitNotificationsEnabled = false;
 
@@ -62,6 +63,7 @@ class _SettingsPageState extends State<SettingsPage> {
         _officeEnd = _parseTime(data['office_end'] as String?);
         _personalStart = _parseTime(data['personal_start'] as String?);
         _personalEnd = _parseTime(data['personal_end'] as String?);
+        _weekendDays = _parseWeekendDays(data['weekend_days']);
       } else {
         _isDark = AppTheme.themeMode.value == ThemeMode.dark;
       }
@@ -70,6 +72,16 @@ class _SettingsPageState extends State<SettingsPage> {
     } finally {
       setState(() => _loading = false);
     }
+  }
+
+  Set<int> _parseWeekendDays(dynamic value) {
+    final rawDays = value is Iterable ? value : const [];
+    final days = rawDays
+        .map((day) => day is num ? day.toInt() : int.tryParse('$day'))
+        .whereType<int>()
+        .where((day) => day >= 1 && day <= 7)
+        .toSet();
+    return days.isEmpty ? {6, 7} : days;
   }
 
   TimeOfDay? _parseTime(String? text) {
@@ -89,6 +101,17 @@ class _SettingsPageState extends State<SettingsPage> {
   String _toStorage(TimeOfDay? t) {
     if (t == null) return '';
     return '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  }
+
+  void _toggleWeekendDay(int day) {
+    setState(() {
+      if (_weekendDays.contains(day)) {
+        if (_weekendDays.length == 1) return;
+        _weekendDays.remove(day);
+      } else {
+        _weekendDays.add(day);
+      }
+    });
   }
 
   Future<void> _pickTime(
@@ -169,6 +192,7 @@ class _SettingsPageState extends State<SettingsPage> {
         'office_end': _toStorage(_officeEnd),
         'personal_start': _toStorage(_personalStart),
         'personal_end': _toStorage(_personalEnd),
+        'weekend_days': _weekendDays.toList()..sort(),
       }, onConflict: 'user_id');
       remoteSaveSucceeded = true;
 
@@ -322,6 +346,25 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
                 const SizedBox(height: 32),
 
+                const Text(
+                  'Weekend Days',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final day in _weekdayOptions)
+                      FilterChip(
+                        label: Text(day.label),
+                        selected: _weekendDays.contains(day.value),
+                        onSelected: (_) => _toggleWeekendDay(day.value),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 32),
+
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton.icon(
@@ -334,4 +377,21 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
     );
   }
+}
+
+const _weekdayOptions = [
+  _WeekdayOption(1, 'Mon'),
+  _WeekdayOption(2, 'Tue'),
+  _WeekdayOption(3, 'Wed'),
+  _WeekdayOption(4, 'Thu'),
+  _WeekdayOption(5, 'Fri'),
+  _WeekdayOption(6, 'Sat'),
+  _WeekdayOption(7, 'Sun'),
+];
+
+class _WeekdayOption {
+  final int value;
+  final String label;
+
+  const _WeekdayOption(this.value, this.label);
 }

@@ -571,8 +571,7 @@ class _HomePageState extends State<HomePage> {
     // Re-fetch quotes from Supabase
     await _fetchAllQuotes();
     await Future.wait([
-      if (_habitsDashboardKey.currentState case final habits?)
-        habits.refresh(),
+      if (_habitsDashboardKey.currentState case final habits?) habits.refresh(),
       if (_readerDashboardKey.currentState case final reader?)
         reader._refresh(),
       if (_budgetDashboardKey.currentState case final budget?)
@@ -864,6 +863,16 @@ class _HomePageState extends State<HomePage> {
     return diff > 0 ? diff : 0;
   }
 
+  Set<int> _parseWeekendDays(dynamic value) {
+    final rawDays = value is Iterable ? value : const [];
+    final days = rawDays
+        .map((day) => day is num ? day.toInt() : int.tryParse('$day'))
+        .whereType<int>()
+        .where((day) => day >= 1 && day <= 7)
+        .toSet();
+    return days.isEmpty ? {6, 7} : days;
+  }
+
   Future<void> _fetchAllQuotes() async {
     final supabase = Supabase.instance.client;
 
@@ -892,7 +901,9 @@ class _HomePageState extends State<HomePage> {
     // 1) Load office + personal hours from user_settings
     final settingsRow = await supabase
         .from('user_settings')
-        .select('office_start, office_end, personal_start, personal_end')
+        .select(
+          'office_start, office_end, personal_start, personal_end, weekend_days',
+        )
         .eq('user_id', user.id)
         .maybeSingle();
 
@@ -905,6 +916,7 @@ class _HomePageState extends State<HomePage> {
     final officeEnd = _parseTimeFromStorage(endOfficeStr);
     final personalStart = _parseTimeFromStorage(startPersonalStr);
     final personalEnd = _parseTimeFromStorage(endPersonalStr);
+    final weekendDays = _parseWeekendDays(settingsRow?['weekend_days']);
 
     if (officeStart == null || officeEnd == null) {
       // No office hours set → treat as no config
@@ -966,7 +978,9 @@ class _HomePageState extends State<HomePage> {
         _DailyEfficiency(
           date: day,
           spentMinutes: spentMinutes,
-          plannedMinutes: plannedMinutesPerDay,
+          plannedMinutes: weekendDays.contains(day.weekday)
+              ? 0
+              : plannedMinutesPerDay,
         ),
       );
     }

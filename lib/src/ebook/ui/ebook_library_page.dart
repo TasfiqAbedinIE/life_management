@@ -546,19 +546,10 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
     return '${totalSeconds}s';
   }
 
-  String _estimatedRemainingText(Ebook ebook, _EbookLibraryData data) {
-    final progress = data.userStates[ebook.id]?.progress ?? 0.0;
+  String _readingTimeText(Ebook ebook, _EbookLibraryData data) {
     final spent = data.readingStats.totalSecondsByBook[ebook.id] ?? 0;
-
-    if (progress <= 0 || progress >= 1 || spent <= 0) {
-      return 'Keep reading';
-    }
-
-    final estimatedTotal = spent / progress;
-    final remaining = (estimatedTotal - spent).round();
-    if (remaining <= 0) return 'Almost done';
-
-    return '${_formatDuration(remaining)} left';
+    if (spent <= 0) return 'Just started';
+    return '${_formatDuration(spent)} read';
   }
 
   Widget _sectionHeader(String title) {
@@ -770,7 +761,7 @@ class _EbookLibraryPageState extends State<EbookLibraryPage> {
                             ),
                             const SizedBox(height: 10),
                             Text(
-                              _estimatedRemainingText(ebook, data),
+                              _readingTimeText(ebook, data),
                               style: TextStyle(color: AppPalette.mutedText(context), fontSize: 16),
                             ),
                           ],

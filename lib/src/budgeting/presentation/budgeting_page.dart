@@ -285,7 +285,6 @@ class _BudgetShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colors = _LedgerColors.of(context);
     final stats = _BudgetStats.fromData(data);
 
     return Column(
@@ -322,16 +321,7 @@ class _BudgetShell extends StatelessWidget {
             _BudgetSection.accounts => _AccountsSectionView(data: data),
           },
         ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: colors.surfaceAlt,
-            border: Border(top: BorderSide(color: colors.line)),
-          ),
-          child: _LedgerBottomNav(
-            selected: section,
-            onChanged: onSectionChanged,
-          ),
-        ),
+        _LedgerBottomNav(selected: section, onChanged: onSectionChanged),
       ],
     );
   }
@@ -613,26 +603,122 @@ class _LedgerBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: _BudgetSection.values.indexOf(selected),
-      onDestinationSelected: (index) => onChanged(_BudgetSection.values[index]),
-      destinations: const [
-        NavigationDestination(
-          icon: Icon(Icons.receipt_long_outlined),
-          selectedIcon: Icon(Icons.receipt_long),
-          label: 'Trans.',
+    final colors = _LedgerColors.of(context);
+    final bottomInset = MediaQuery.paddingOf(context).bottom;
+
+    return Padding(
+      padding: EdgeInsets.fromLTRB(14, 8, 14, math.max(12, bottomInset)),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: colors.line.withValues(alpha: 0.55)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(
+                alpha: Theme.of(context).brightness == Brightness.dark
+                    ? 0.32
+                    : 0.12,
+              ),
+              blurRadius: 22,
+              offset: const Offset(0, 7),
+            ),
+          ],
         ),
-        NavigationDestination(
-          icon: Icon(Icons.bar_chart_outlined),
-          selectedIcon: Icon(Icons.bar_chart),
-          label: 'Stats',
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: Row(
+            children: [
+              _LedgerNavItem(
+                icon: Icons.receipt_long_outlined,
+                selectedIcon: Icons.receipt_long_rounded,
+                label: 'Trans.',
+                isSelected: selected == _BudgetSection.transactions,
+                colors: colors,
+                onTap: () => onChanged(_BudgetSection.transactions),
+              ),
+              _LedgerNavItem(
+                icon: Icons.bar_chart_outlined,
+                selectedIcon: Icons.bar_chart_rounded,
+                label: 'Stats',
+                isSelected: selected == _BudgetSection.stats,
+                colors: colors,
+                onTap: () => onChanged(_BudgetSection.stats),
+              ),
+              _LedgerNavItem(
+                icon: Icons.account_balance_wallet_outlined,
+                selectedIcon: Icons.account_balance_wallet_rounded,
+                label: 'Accounts',
+                isSelected: selected == _BudgetSection.accounts,
+                colors: colors,
+                onTap: () => onChanged(_BudgetSection.accounts),
+              ),
+            ],
+          ),
         ),
-        NavigationDestination(
-          icon: Icon(Icons.account_balance_wallet_outlined),
-          selectedIcon: Icon(Icons.account_balance_wallet),
-          label: 'Accounts',
+      ),
+    );
+  }
+}
+
+class _LedgerNavItem extends StatelessWidget {
+  const _LedgerNavItem({
+    required this.icon,
+    required this.selectedIcon,
+    required this.label,
+    required this.isSelected,
+    required this.colors,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final IconData selectedIcon;
+  final String label;
+  final bool isSelected;
+  final _LedgerColors colors;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isSelected
+        ? Theme.of(context).colorScheme.primary
+        : colors.muted;
+
+    return Expanded(
+      child: Semantics(
+        selected: isSelected,
+        button: true,
+        label: label,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            height: 68,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(isSelected ? selectedIcon : icon, color: color, size: 25),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 180),
+                  child: isSelected
+                      ? Padding(
+                          key: ValueKey(label),
+                          padding: const EdgeInsets.only(top: 3),
+                          child: Text(
+                            label,
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        )
+                      : const SizedBox(key: ValueKey('hidden'), height: 0),
+                ),
+              ],
+            ),
+          ),
         ),
-      ],
+      ),
     );
   }
 }

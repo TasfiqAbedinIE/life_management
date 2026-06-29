@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../theme/app_theme.dart';
 import '../data/notes_repository.dart';
@@ -19,7 +18,6 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   final _repo = NotesRepository.instance;
   final _titleCtrl = TextEditingController();
   final _contentCtrl = TextEditingController();
-  final _tagsCtrl = TextEditingController();
 
   static const _palette = [
     0xFFFFF7E8,
@@ -56,7 +54,6 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   void dispose() {
     _titleCtrl.dispose();
     _contentCtrl.dispose();
-    _tagsCtrl.dispose();
     for (final item in _checklistItems) {
       item.controller.dispose();
     }
@@ -66,7 +63,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
   bool get _hasText =>
       _titleCtrl.text.trim().isNotEmpty ||
       (_selectedType == NoteType.checklist
-          ? _checklistItems.any((item) => item.controller.text.trim().isNotEmpty)
+          ? _checklistItems.any(
+              (item) => item.controller.text.trim().isNotEmpty,
+            )
           : _contentCtrl.text.trim().isNotEmpty);
 
   Future<void> _saveIfNeeded() async {
@@ -106,13 +105,6 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     return true;
   }
 
-  void _addTag(String tag) {
-    final normalized = tag.trim().toLowerCase();
-    if (normalized.isEmpty || _tags.contains(normalized)) return;
-    setState(() => _tags = [..._tags, normalized]);
-    _tagsCtrl.clear();
-  }
-
   List<_ChecklistItemState> _parseChecklistItems(String raw) {
     final lines = raw
         .split('\n')
@@ -121,10 +113,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
         .toList();
 
     if (lines.isEmpty) {
-      return [
-        _ChecklistItemState(text: 'First task'),
-        _ChecklistItemState(text: 'Second task'),
-      ];
+      return [_ChecklistItemState(text: '')];
     }
 
     return lines.map((line) {
@@ -202,9 +191,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                 children: [
                   Text(
                     'On-device smart assist',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -241,7 +230,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                   ),
                   _AssistCard(
                     title: 'Suggested tags',
-                    body: insight.suggestedTags.map((tag) => '#$tag').join('  '),
+                    body: insight.suggestedTags
+                        .map((tag) => '#$tag')
+                        .join('  '),
                     actionLabel: 'Add tags',
                     onApply: () {
                       setState(() {
@@ -255,8 +246,9 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                     body: insight.actionItems.isEmpty
                         ? 'No clear action items detected yet.'
                         : insight.actionItems.join('\n'),
-                    actionLabel:
-                        insight.actionItems.isEmpty ? null : 'Append checklist',
+                    actionLabel: insight.actionItems.isEmpty
+                        ? null
+                        : 'Append checklist',
                     onApply: insight.actionItems.isEmpty
                         ? null
                         : () {
@@ -294,24 +286,69 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
     );
   }
 
-  IconData get _typeIcon => switch (_selectedType) {
-    NoteType.checklist => Icons.checklist_rounded,
-    NoteType.meeting => Icons.groups_rounded,
-    NoteType.idea => Icons.lightbulb_outline_rounded,
-    NoteType.rich => Icons.notes_rounded,
-  };
+  Future<void> _selectCanvasColor() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Canvas color',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 14,
+                runSpacing: 14,
+                children: _palette.map((color) {
+                  final selected = color == _selectedColor;
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() => _selectedColor = color);
+                      Navigator.pop(context);
+                    },
+                    child: Container(
+                      width: 48,
+                      height: 48,
+                      decoration: BoxDecoration(
+                        color: Color(color),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: selected
+                              ? Colors.black.withValues(alpha: 0.8)
+                              : Colors.black.withValues(alpha: 0.15),
+                          width: selected ? 2.5 : 1,
+                        ),
+                      ),
+                      child: selected ? const Icon(Icons.check_rounded) : null,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
-    final updatedAt = widget.note?.updatedAt ?? DateTime.now();
-
+    // WillPopScope keeps the existing save-before-back behavior.
+    // ignore: deprecated_member_use
     return WillPopScope(
       onWillPop: _onWillPop,
       child: Scaffold(
         backgroundColor: Color(_selectedColor),
         appBar: AppBar(
           backgroundColor: Colors.transparent,
-          title: Text(widget.note?.id == null ? 'Compose note' : 'Refine note'),
           actions: [
             IconButton(
               onPressed: () => setState(() => _isPinned = !_isPinned),
@@ -326,9 +363,14 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
               icon: const Icon(Icons.auto_awesome_rounded),
             ),
             IconButton(
+              onPressed: _selectCanvasColor,
+              tooltip: 'Canvas color',
+              icon: const Icon(Icons.palette_outlined),
+            ),
+            IconButton(
               onPressed: () async {
                 await _saveIfNeeded();
-                if (!mounted) return;
+                if (!context.mounted) return;
                 Navigator.pop(context);
               },
               icon: _saving
@@ -361,64 +403,14 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              Text(
-                                _selectedType.label,
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              const Spacer(),
-                              Text(
-                                DateFormat('dd MMM yyyy | hh:mm a').format(updatedAt),
-                                style: Theme.of(
-                                  context,
-                                ).textTheme.bodySmall?.copyWith(
-                                  color: Colors.black.withValues(alpha: 0.6),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 14),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 14,
-                              vertical: 12,
-                            ),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.5),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: Colors.black.withValues(alpha: 0.08),
-                              ),
-                            ),
-                            child: Row(
-                              children: [
-                                Icon(_typeIcon),
-                                const SizedBox(width: 10),
-                                Text(
-                                  _selectedType.label,
-                                  style: Theme.of(context).textTheme.titleSmall
-                                      ?.copyWith(fontWeight: FontWeight.w700),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 14),
                           TextField(
                             controller: _titleCtrl,
                             decoration: const InputDecoration(
                               hintText: 'Give this note a strong title',
                               labelText: 'Title',
                             ),
-                            style: Theme.of(
-                              context,
-                            ).textTheme.headlineSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.w800),
                           ),
                           const SizedBox(height: 14),
                           if (_selectedType == NoteType.checklist)
@@ -432,7 +424,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                           else
                             TextField(
                               controller: _contentCtrl,
-                              minLines: 14,
+                              minLines: 24,
                               maxLines: null,
                               keyboardType: TextInputType.multiline,
                               decoration: const InputDecoration(
@@ -442,121 +434,7 @@ class _NoteEditorPageState extends State<NoteEditorPage> {
                                 alignLabelWithHint: true,
                               ),
                             ),
-                          const SizedBox(height: 18),
-                          Text(
-                            'Tags',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              ..._tags.map(
-                                (tag) => InputChip(
-                                  label: Text('#$tag'),
-                                  onDeleted: () {
-                                    setState(() {
-                                      _tags = _tags
-                                          .where((item) => item != tag)
-                                          .toList();
-                                    });
-                                  },
-                                ),
-                              ),
-                              SizedBox(
-                                width: 170,
-                                child: TextField(
-                                  controller: _tagsCtrl,
-                                  decoration: InputDecoration(
-                                    hintText: 'Add tag',
-                                    suffixIcon: IconButton(
-                                      onPressed: () => _addTag(_tagsCtrl.text),
-                                      icon: const Icon(Icons.add_rounded),
-                                    ),
-                                  ),
-                                  onSubmitted: _addTag,
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 18),
-                          Text(
-                            'Canvas color',
-                            style: Theme.of(
-                              context,
-                            ).textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 10,
-                            runSpacing: 10,
-                            children: _palette.map((color) {
-                              final selected = color == _selectedColor;
-                              return GestureDetector(
-                                onTap: () => setState(() => _selectedColor = color),
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 180),
-                                  width: 42,
-                                  height: 42,
-                                  decoration: BoxDecoration(
-                                    color: Color(color),
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: selected
-                                          ? Colors.black.withValues(alpha: 0.8)
-                                          : Colors.black.withValues(alpha: 0.15),
-                                      width: selected ? 2.2 : 1,
-                                    ),
-                                  ),
-                                  child: selected
-                                      ? const Icon(Icons.check_rounded)
-                                      : null,
-                                ),
-                              );
-                            }).toList(),
-                          ),
                         ],
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Container(
-                padding: const EdgeInsets.fromLTRB(18, 10, 18, 18),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.58),
-                  border: Border(
-                    top: BorderSide(
-                      color: Colors.black.withValues(alpha: 0.06),
-                    ),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.tonalIcon(
-                        onPressed: _openSmartAssist,
-                        icon: const Icon(Icons.psychology_alt_outlined),
-                        label: const Text('Smart assist'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton.icon(
-                        onPressed: () async {
-                          await _saveIfNeeded();
-                          if (!mounted) return;
-                          Navigator.pop(context);
-                        },
-                        icon: const Icon(Icons.save_outlined),
-                        label: const Text('Save note'),
                       ),
                     ),
                   ],
@@ -607,10 +485,7 @@ class _AssistCard extends StatelessWidget {
           Text(body, style: const TextStyle(height: 1.35)),
           if (actionLabel != null && onApply != null) ...[
             const SizedBox(height: 12),
-            FilledButton.tonal(
-              onPressed: onApply,
-              child: Text(actionLabel!),
-            ),
+            FilledButton.tonal(onPressed: onApply, child: Text(actionLabel!)),
           ],
         ],
       ),
@@ -643,58 +518,94 @@ class _ChecklistEditor extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.38),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.black.withValues(alpha: 0.08)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Checklist',
-            style: Theme.of(
-              context,
-            ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800),
-          ),
-          const SizedBox(height: 10),
-          ...List.generate(items.length, (index) {
-            final item = items[index];
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                children: [
-                  Checkbox(
-                    value: item.checked,
-                    onChanged: (value) => onToggle(index, value),
+    final colors = Theme.of(context).colorScheme;
+
+    return Column(
+      children: [
+        ...List.generate(items.length, (index) {
+          final item = items[index];
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Checkbox(
+                value: item.checked,
+                onChanged: (value) => onToggle(index, value),
+                shape: const CircleBorder(),
+                visualDensity: VisualDensity.compact,
+                side: BorderSide(
+                  color: colors.onSurface.withValues(alpha: 0.45),
+                  width: 1.6,
+                ),
+              ),
+              Expanded(
+                child: TextField(
+                  controller: item.controller,
+                  onChanged: (_) => onChanged(),
+                  onSubmitted: (_) {
+                    if (index == items.length - 1) onAdd();
+                  },
+                  textInputAction: TextInputAction.next,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    decoration: item.checked
+                        ? TextDecoration.lineThrough
+                        : TextDecoration.none,
+                    color: item.checked
+                        ? colors.onSurface.withValues(alpha: 0.5)
+                        : colors.onSurface,
                   ),
-                  Expanded(
-                    child: TextField(
-                      controller: item.controller,
-                      onChanged: (_) => onChanged(),
-                      decoration: const InputDecoration(
-                        hintText: 'Checklist item',
+                  decoration: InputDecoration(
+                    hintText: 'List item',
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                    border: UnderlineInputBorder(
+                      borderSide: BorderSide(
+                        color: colors.onSurface.withValues(alpha: 0.1),
+                      ),
+                    ),
+                    enabledBorder: UnderlineInputBorder(
+                      borderSide: BorderSide(
+                        color: colors.onSurface.withValues(alpha: 0.1),
                       ),
                     ),
                   ),
-                  IconButton(
-                    onPressed: () => onRemove(index),
-                    icon: const Icon(Icons.close_rounded),
-                  ),
-                ],
+                ),
               ),
-            );
-          }),
-          const SizedBox(height: 4),
-          FilledButton.tonalIcon(
-            onPressed: onAdd,
-            icon: const Icon(Icons.add_rounded),
-            label: const Text('Add item'),
+              IconButton(
+                onPressed: () => onRemove(index),
+                tooltip: 'Remove item',
+                visualDensity: VisualDensity.compact,
+                icon: Icon(
+                  Icons.close_rounded,
+                  size: 19,
+                  color: colors.onSurface.withValues(alpha: 0.45),
+                ),
+              ),
+            ],
+          );
+        }),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: onAdd,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+            child: Row(
+              children: [
+                Icon(Icons.add_rounded, color: colors.primary),
+                const SizedBox(width: 12),
+                Text(
+                  'Add item',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: colors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ],
-      ),
+        ),
+        const SizedBox(height: 280),
+      ],
     );
   }
 }

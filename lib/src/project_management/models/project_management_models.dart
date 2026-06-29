@@ -7,56 +7,56 @@ enum TaskStatus { todo, inProgress, review, done }
 enum TaskPriority { low, medium, high, urgent }
 
 String projectStatusToValue(ProjectStatus value) => switch (value) {
-      ProjectStatus.planning => 'planning',
-      ProjectStatus.active => 'active',
-      ProjectStatus.onHold => 'on_hold',
-      ProjectStatus.completed => 'completed',
-      ProjectStatus.archived => 'archived',
-    };
+  ProjectStatus.planning => 'planning',
+  ProjectStatus.active => 'active',
+  ProjectStatus.onHold => 'on_hold',
+  ProjectStatus.completed => 'completed',
+  ProjectStatus.archived => 'archived',
+};
 
 ProjectStatus projectStatusFromValue(String value) => switch (value) {
-      'planning' => ProjectStatus.planning,
-      'active' => ProjectStatus.active,
-      'on_hold' => ProjectStatus.onHold,
-      'completed' => ProjectStatus.completed,
-      'archived' => ProjectStatus.archived,
-      _ => ProjectStatus.planning,
-    };
+  'planning' => ProjectStatus.planning,
+  'active' => ProjectStatus.active,
+  'on_hold' => ProjectStatus.onHold,
+  'completed' => ProjectStatus.completed,
+  'archived' => ProjectStatus.archived,
+  _ => ProjectStatus.planning,
+};
 
 String projectMemberRoleToValue(ProjectMemberRole value) => value.name;
 
 ProjectMemberRole projectMemberRoleFromValue(String value) => switch (value) {
-      'owner' => ProjectMemberRole.owner,
-      'admin' => ProjectMemberRole.admin,
-      'member' => ProjectMemberRole.member,
-      'viewer' => ProjectMemberRole.viewer,
-      _ => ProjectMemberRole.member,
-    };
+  'owner' => ProjectMemberRole.owner,
+  'admin' => ProjectMemberRole.admin,
+  'member' => ProjectMemberRole.member,
+  'viewer' => ProjectMemberRole.viewer,
+  _ => ProjectMemberRole.member,
+};
 
 String taskStatusToValue(TaskStatus value) => switch (value) {
-      TaskStatus.todo => 'todo',
-      TaskStatus.inProgress => 'in_progress',
-      TaskStatus.review => 'review',
-      TaskStatus.done => 'done',
-    };
+  TaskStatus.todo => 'todo',
+  TaskStatus.inProgress => 'in_progress',
+  TaskStatus.review => 'review',
+  TaskStatus.done => 'done',
+};
 
 TaskStatus taskStatusFromValue(String value) => switch (value) {
-      'todo' => TaskStatus.todo,
-      'in_progress' => TaskStatus.inProgress,
-      'review' => TaskStatus.review,
-      'done' => TaskStatus.done,
-      _ => TaskStatus.todo,
-    };
+  'todo' => TaskStatus.todo,
+  'in_progress' => TaskStatus.inProgress,
+  'review' => TaskStatus.review,
+  'done' => TaskStatus.done,
+  _ => TaskStatus.todo,
+};
 
 String taskPriorityToValue(TaskPriority value) => value.name;
 
 TaskPriority taskPriorityFromValue(String value) => switch (value) {
-      'low' => TaskPriority.low,
-      'medium' => TaskPriority.medium,
-      'high' => TaskPriority.high,
-      'urgent' => TaskPriority.urgent,
-      _ => TaskPriority.medium,
-    };
+  'low' => TaskPriority.low,
+  'medium' => TaskPriority.medium,
+  'high' => TaskPriority.high,
+  'urgent' => TaskPriority.urgent,
+  _ => TaskPriority.medium,
+};
 
 class ProjectSummary {
   const ProjectSummary({
@@ -88,8 +88,7 @@ class ProjectSummary {
       inProgressTasks: (map['in_progress_tasks'] as num?)?.toInt() ?? 0,
       todoTasks: (map['todo_tasks'] as num?)?.toInt() ?? 0,
       reviewTasks: (map['review_tasks'] as num?)?.toInt() ?? 0,
-      completionPercent:
-          ((map['completion_percent'] as num?) ?? 0).toDouble(),
+      completionPercent: ((map['completion_percent'] as num?) ?? 0).toDouble(),
     );
   }
 }
@@ -258,7 +257,9 @@ class TaskModel {
   final List<TaskLabelModel> labels;
 
   bool get isOverdue =>
-      dueDate != null && dueDate!.isBefore(DateTime.now()) && status != TaskStatus.done;
+      dueDate != null &&
+      dueDate!.isBefore(DateTime.now()) &&
+      status != TaskStatus.done;
 
   factory TaskModel.fromMap(Map<String, dynamic> map) {
     final rawLabels = map['project_task_label_map'];
@@ -287,11 +288,17 @@ class TaskModel {
       updatedBy: '${map['updated_by'] ?? ''}',
       labels: rawLabels is List
           ? rawLabels
-              .map((item) => item is Map<String, dynamic> && item['project_task_labels'] is Map<String, dynamic>
-                  ? TaskLabelModel.fromMap(item['project_task_labels'] as Map<String, dynamic>)
-                  : null)
-              .whereType<TaskLabelModel>()
-              .toList()
+                .map(
+                  (item) =>
+                      item is Map<String, dynamic> &&
+                          item['project_task_labels'] is Map<String, dynamic>
+                      ? TaskLabelModel.fromMap(
+                          item['project_task_labels'] as Map<String, dynamic>,
+                        )
+                      : null,
+                )
+                .whereType<TaskLabelModel>()
+                .toList()
           : const [],
     );
   }
@@ -417,7 +424,12 @@ class UserProfileModel {
   final String? email;
   final String? fullName;
 
-  String get displayName => (fullName?.trim().isNotEmpty ?? false) ? fullName!.trim() : (email ?? 'User');
+  String get memberName =>
+      (fullName?.trim().isNotEmpty ?? false) ? fullName!.trim() : 'Member';
+
+  String get displayName => (fullName?.trim().isNotEmpty ?? false)
+      ? fullName!.trim()
+      : (email ?? 'User');
 
   factory UserProfileModel.fromMap(Map<String, dynamic> map) {
     return UserProfileModel(

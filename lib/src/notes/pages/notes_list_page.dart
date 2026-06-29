@@ -21,6 +21,7 @@ class _NotesListPageState extends State<NotesListPage> {
   List<Note> _notes = [];
   NoteType? _selectedType;
   bool _pinnedOnly = false;
+  bool _thumbnailView = true;
 
   @override
   void initState() {
@@ -151,6 +152,11 @@ class _NotesListPageState extends State<NotesListPage> {
                 },
               ),
               const SizedBox(height: 18),
+              _ViewModeToggle(
+                thumbnailView: _thumbnailView,
+                onChanged: (value) => setState(() => _thumbnailView = value),
+              ),
+              const SizedBox(height: 12),
               if (_loading)
                 const Padding(
                   padding: EdgeInsets.only(top: 48),
@@ -159,39 +165,89 @@ class _NotesListPageState extends State<NotesListPage> {
               else if (_notes.isEmpty)
                 const _EmptyNotes()
               else ...[
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: _notes.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisSpacing: 14,
-                    crossAxisSpacing: 14,
-                    childAspectRatio: 0.88,
+                if (_thumbnailView)
+                  GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _notes.length,
+                    gridDelegate:
+                        const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          mainAxisSpacing: 14,
+                          crossAxisSpacing: 14,
+                          childAspectRatio: 1.05,
+                        ),
+                    itemBuilder: (context, index) =>
+                        _buildNoteCard(_notes[index], thumbnail: true),
+                  )
+                else
+                  ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: _notes.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) =>
+                        _buildNoteCard(_notes[index], thumbnail: false),
                   ),
-                  itemBuilder: (context, index) {
-                    final note = _notes[index];
-                    return _NoteCard(
-                      note: note,
-                      subtitleDate: _formatDate(note.updatedAt),
-                      onTap: () => _openEditor(note: note),
-                      onDelete: () => _deleteNote(note),
-                      onPin: () async {
-                        if (note.id == null) return;
-                        await _repo.setPinned(
-                          id: note.id!,
-                          pinned: !note.isPinned,
-                        );
-                        await _load();
-                      },
-                    );
-                  },
-                ),
               ],
             ],
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildNoteCard(Note note, {required bool thumbnail}) {
+    return _NoteCard(
+      note: note,
+      subtitleDate: _formatDate(note.updatedAt),
+      thumbnail: thumbnail,
+      onTap: () => _openEditor(note: note),
+      onDelete: () => _deleteNote(note),
+      onPin: () async {
+        if (note.id == null) return;
+        await _repo.setPinned(id: note.id!, pinned: !note.isPinned);
+        await _load();
+      },
+    );
+  }
+}
+
+class _ViewModeToggle extends StatelessWidget {
+  final bool thumbnailView;
+  final ValueChanged<bool> onChanged;
+
+  const _ViewModeToggle({required this.thumbnailView, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          'Your notes',
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+        ),
+        const Spacer(),
+        SegmentedButton<bool>(
+          showSelectedIcon: false,
+          segments: const [
+            ButtonSegment(
+              value: true,
+              icon: Icon(Icons.grid_view_rounded),
+              tooltip: 'Thumbnail view',
+            ),
+            ButtonSegment(
+              value: false,
+              icon: Icon(Icons.view_list_rounded),
+              tooltip: 'List view',
+            ),
+          ],
+          selected: {thumbnailView},
+          onSelectionChanged: (value) => onChanged(value.first),
+        ),
+      ],
     );
   }
 }
@@ -260,13 +316,6 @@ class _QuickCaptureRow extends StatelessWidget {
                 color: AppPalette.surface(context),
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(color: AppPalette.border(context)),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppPalette.softShadow(context),
-                    blurRadius: 18,
-                    offset: const Offset(0, 10),
-                  ),
-                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -405,6 +454,7 @@ class _NoteCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onDelete;
   final VoidCallback onPin;
+  final bool thumbnail;
 
   const _NoteCard({
     required this.note,
@@ -412,117 +462,124 @@ class _NoteCard extends StatelessWidget {
     required this.onTap,
     required this.onDelete,
     required this.onPin,
+    required this.thumbnail,
   });
 
   @override
   Widget build(BuildContext context) {
     final title = note.title.trim().isEmpty ? 'Untitled' : note.title.trim();
-    final content = note.content.trim();
-
     return Material(
       color: Color(note.colorValue),
-      borderRadius: BorderRadius.circular(24),
+      borderRadius: BorderRadius.circular(20),
       child: InkWell(
-        borderRadius: BorderRadius.circular(24),
+        borderRadius: BorderRadius.circular(20),
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(thumbnail ? 14 : 16),
+          child: thumbnail
+              ? _ThumbnailCardContent(
+                  note: note,
+                  title: title,
+                  date: subtitleDate,
+                  onPin: onPin,
+                  onDelete: onDelete,
+                )
+              : _ListCardContent(
+                  note: note,
+                  title: title,
+                  date: subtitleDate,
+                  onPin: onPin,
+                  onDelete: onDelete,
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ThumbnailCardContent extends StatelessWidget {
+  final Note note;
+  final String title;
+  final String date;
+  final VoidCallback onPin;
+  final VoidCallback onDelete;
+
+  const _ThumbnailCardContent({
+    required this.note,
+    required this.title,
+    required this.date,
+    required this.onPin,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _NoteTypeBadge(type: note.type),
+        const SizedBox(height: 12),
+        Expanded(
+          child: Text(
+            title,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+        ),
+        Text(
+          date,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Colors.black.withValues(alpha: 0.58),
+          ),
+        ),
+        const SizedBox(height: 4),
+        _NoteActions(note: note, onPin: onPin, onDelete: onDelete),
+      ],
+    );
+  }
+}
+
+class _ListCardContent extends StatelessWidget {
+  final Note note;
+  final String title;
+  final String date;
+  final VoidCallback onPin;
+  final VoidCallback onDelete;
+
+  const _ListCardContent({
+    required this.note,
+    required this.title,
+    required this.date,
+    required this.onPin,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
-                    ),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withValues(alpha: 0.06),
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                    child: Text(
-                      note.type.label,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                  const Spacer(),
-                  if (note.isPinned)
-                    const Padding(
-                      padding: EdgeInsets.only(right: 6),
-                      child: Icon(Icons.push_pin_rounded, size: 18),
-                    ),
-                  PopupMenuButton<String>(
-                    padding: EdgeInsets.zero,
-                    onSelected: (value) {
-                      if (value == 'pin') onPin();
-                      if (value == 'delete') onDelete();
-                    },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: 'pin',
-                        child: Text(note.isPinned ? 'Unpin note' : 'Pin note'),
-                      ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Text('Delete note'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
+              _NoteTypeBadge(type: note.type),
+              const SizedBox(height: 9),
               Text(
                 title,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(
                   context,
                 ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
               ),
-              const SizedBox(height: 2),
-              Expanded(
-                child: Text(
-                  content.isEmpty ? 'Tap to keep writing.' : content,
-                  maxLines: 6,
-                  overflow: TextOverflow.ellipsis,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium?.copyWith(height: 1.35),
-                ),
-              ),
-              if (note.tags.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: note.tags.take(3).map((tag) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 4,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        borderRadius: BorderRadius.circular(999),
-                      ),
-                      child: Text(
-                        '#$tag',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-              ],
-              const SizedBox(height: 12),
+              const SizedBox(height: 5),
               Text(
-                subtitleDate,
+                date,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Colors.black.withValues(alpha: 0.58),
                 ),
@@ -530,7 +587,66 @@ class _NoteCard extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(width: 10),
+        _NoteActions(note: note, onPin: onPin, onDelete: onDelete),
+      ],
+    );
+  }
+}
+
+class _NoteTypeBadge extends StatelessWidget {
+  final NoteType type;
+
+  const _NoteTypeBadge({required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.06),
+        borderRadius: BorderRadius.circular(999),
       ),
+      child: Text(
+        type.label,
+        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
+      ),
+    );
+  }
+}
+
+class _NoteActions extends StatelessWidget {
+  final Note note;
+  final VoidCallback onPin;
+  final VoidCallback onDelete;
+
+  const _NoteActions({
+    required this.note,
+    required this.onPin,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          onPressed: onPin,
+          tooltip: note.isPinned ? 'Unpin note' : 'Pin note',
+          visualDensity: VisualDensity.compact,
+          icon: Icon(
+            note.isPinned ? Icons.push_pin_rounded : Icons.push_pin_outlined,
+            size: 20,
+          ),
+        ),
+        IconButton(
+          onPressed: onDelete,
+          tooltip: 'Delete note',
+          visualDensity: VisualDensity.compact,
+          icon: const Icon(Icons.delete_outline_rounded, size: 20),
+        ),
+      ],
     );
   }
 }

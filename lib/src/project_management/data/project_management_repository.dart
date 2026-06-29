@@ -16,7 +16,7 @@ class ProjectManagementException implements Exception {
 
 class ProjectManagementRepository {
   ProjectManagementRepository({SupabaseClient? client})
-      : _client = client ?? Supabase.instance.client;
+    : _client = client ?? Supabase.instance.client;
 
   final SupabaseClient _client;
 
@@ -31,6 +31,8 @@ class ProjectManagementRepository {
   }
 
   String get _currentUserId => _currentUser.id;
+
+  String get currentUserId => _currentUserId;
 
   static const _projectSelect = '''
 id,
@@ -151,10 +153,7 @@ project_task_label_map!left(
   }
 
   Future<ProjectModel> archiveProject(String projectId) async {
-    return updateProject(
-      projectId: projectId,
-      status: ProjectStatus.archived,
-    );
+    return updateProject(projectId: projectId, status: ProjectStatus.archived);
   }
 
   Future<void> deleteProject(String projectId) async {
@@ -245,7 +244,9 @@ project_task_label_map!left(
           .or('email.ilike.%$trimmed%,full_name.ilike.%$trimmed%')
           .limit(20);
       return (response as List<dynamic>)
-          .map((item) => UserProfileModel.fromMap(Map<String, dynamic>.from(item)))
+          .map(
+            (item) => UserProfileModel.fromMap(Map<String, dynamic>.from(item)),
+          )
           .toList();
     } catch (error) {
       _wrapError(error, 'Failed to search users.');
@@ -284,14 +285,42 @@ project_task_label_map!left(
 
   Future<List<ProjectMemberModel>> getProjectMembers(String projectId) async {
     try {
-      final response = await _client
+      final memberResponse = await _client
           .from('project_members')
-          .select('id, project_id, user_id, role, joined_at, added_by, profiles:user_id(id, email, full_name)')
+          .select('id, project_id, user_id, role, joined_at, added_by')
           .eq('project_id', projectId)
           .order('joined_at');
-      return (response as List<dynamic>)
-          .map((item) => ProjectMemberModel.fromMap(Map<String, dynamic>.from(item)))
+      final memberRows = (memberResponse as List<dynamic>)
+          .map((item) => Map<String, dynamic>.from(item))
           .toList();
+      if (memberRows.isEmpty) return const [];
+
+      final userIds = memberRows
+          .map((member) => member['user_id']?.toString())
+          .whereType<String>()
+          .where((id) => id.isNotEmpty)
+          .toSet()
+          .toList();
+      final profilesById = <String, Map<String, dynamic>>{};
+      if (userIds.isNotEmpty) {
+        final profileResponse = await _client
+            .from('profiles')
+            .select('id, email, full_name')
+            .inFilter('id', userIds);
+        for (final item in profileResponse as List<dynamic>) {
+          final profile = Map<String, dynamic>.from(item);
+          final id = profile['id']?.toString();
+          if (id != null) profilesById[id] = profile;
+        }
+      }
+
+      return memberRows.map((member) {
+        final profile = profilesById[member['user_id']?.toString()];
+        return ProjectMemberModel.fromMap({
+          ...member,
+          if (profile != null) 'profiles': profile,
+        });
+      }).toList();
     } catch (error) {
       _wrapError(error, 'Failed to load project members.');
     }
@@ -373,7 +402,9 @@ project_task_label_map!left(
         'updated_by': _currentUserId,
       };
       if (startDate != null) payload['start_date'] = _dateOnly(startDate);
-      if (dueDate != null) payload['due_date'] = dueDate.toUtc().toIso8601String();
+      if (dueDate != null) {
+        payload['due_date'] = dueDate.toUtc().toIso8601String();
+      }
 
       final response = await _client
           .from('project_tasks')
@@ -407,11 +438,7 @@ project_task_label_map!left(
     required TaskStatus status,
     required double orderIndex,
   }) {
-    return updateTask(
-      taskId: taskId,
-      status: status,
-      orderIndex: orderIndex,
-    );
+    return updateTask(taskId: taskId, status: status, orderIndex: orderIndex);
   }
 
   Future<TaskModel> reorderTask({
@@ -443,9 +470,12 @@ project_task_label_map!left(
         query = query.eq('priority', taskPriorityToValue(filter.priority!));
       }
       if (filter.overdueOnly) {
-        query = query.lt('due_date', DateTime.now().toUtc().toIso8601String()).neq('status', 'done');
+        query = query
+            .lt('due_date', DateTime.now().toUtc().toIso8601String())
+            .neq('status', 'done');
       }
-      final response = await query.order(sortBy, ascending: ascending) as List<dynamic>;
+      final response =
+          await query.order(sortBy, ascending: ascending) as List<dynamic>;
       return response
           .map((item) => TaskModel.fromMap(Map<String, dynamic>.from(item)))
           .toList();
@@ -454,7 +484,28 @@ project_task_label_map!left(
     }
   }
 
-  Future<Map<TaskStatus, List<TaskModel>>> getBoardData(String projectId) async {
+  Future<List<TaskModel>> getMyTasks() async {
+    try {
+      final userId = _currentUserId;
+      final response =
+          await _client
+                  .from('project_tasks')
+                  .select(_taskSelect)
+                  .or('assignee_id.eq.$userId,reporter_id.eq.$userId')
+                  .order('due_date', ascending: true, nullsFirst: false)
+                  .order('created_at', ascending: false)
+              as List<dynamic>;
+      return response
+          .map((item) => TaskModel.fromMap(Map<String, dynamic>.from(item)))
+          .toList();
+    } catch (error) {
+      _wrapError(error, 'Failed to load your tasks.');
+    }
+  }
+
+  Future<Map<TaskStatus, List<TaskModel>>> getBoardData(
+    String projectId,
+  ) async {
     final tasks = await getProjectTasks(
       projectId: projectId,
       sortBy: 'order_index',
@@ -510,7 +561,9 @@ project_task_label_map!left(
           .eq('task_id', taskId)
           .order('created_at', ascending: true);
       return (response as List<dynamic>)
-          .map((item) => TaskCommentModel.fromMap(Map<String, dynamic>.from(item)))
+          .map(
+            (item) => TaskCommentModel.fromMap(Map<String, dynamic>.from(item)),
+          )
           .toList();
     } catch (error) {
       _wrapError(error, 'Failed to load comments.');
@@ -527,7 +580,9 @@ project_task_label_map!left(
       final fileName = path.basename(file.path);
       final storagePath =
           '$_currentUserId/$projectId/$taskId/${DateTime.now().millisecondsSinceEpoch}_$fileName';
-      await _client.storage.from(taskAttachmentBucket).upload(
+      await _client.storage
+          .from(taskAttachmentBucket)
+          .upload(
             storagePath,
             file,
             fileOptions: FileOptions(contentType: contentType),
@@ -563,7 +618,10 @@ project_task_label_map!left(
           .eq('task_id', taskId)
           .order('created_at', ascending: true);
       return (response as List<dynamic>)
-          .map((item) => TaskAttachmentModel.fromMap(Map<String, dynamic>.from(item)))
+          .map(
+            (item) =>
+                TaskAttachmentModel.fromMap(Map<String, dynamic>.from(item)),
+          )
           .toList();
     } catch (error) {
       _wrapError(error, 'Failed to load attachments.');
@@ -579,7 +637,9 @@ project_task_label_map!left(
           .order('created_at', ascending: false)
           .limit(100);
       return (response as List<dynamic>)
-          .map((item) => ActivityLogModel.fromMap(Map<String, dynamic>.from(item)))
+          .map(
+            (item) => ActivityLogModel.fromMap(Map<String, dynamic>.from(item)),
+          )
           .toList();
     } catch (error) {
       _wrapError(error, 'Failed to load activity feed.');
@@ -588,8 +648,10 @@ project_task_label_map!left(
 
   Future<ProjectSummary> getProjectSummary(String projectId) async {
     try {
-      final response =
-          await _client.rpc('get_project_summary', params: {'p_project_id': projectId});
+      final response = await _client.rpc(
+        'get_project_summary',
+        params: {'p_project_id': projectId},
+      );
       final rows = response as List<dynamic>;
       if (rows.isEmpty) {
         return ProjectSummary(
@@ -609,5 +671,6 @@ project_task_label_map!left(
     }
   }
 
-  String? _dateOnly(DateTime? value) => value?.toIso8601String().split('T').first;
+  String? _dateOnly(DateTime? value) =>
+      value?.toIso8601String().split('T').first;
 }

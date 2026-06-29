@@ -109,7 +109,6 @@ Deno.serve(async (req) => {
             priority: "HIGH",
             notification: {
               channel_id: "couple_love_pills",
-              click_action: "FLUTTER_NOTIFICATION_CLICK",
             },
           },
         },

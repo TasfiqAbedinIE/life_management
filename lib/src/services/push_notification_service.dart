@@ -28,6 +28,8 @@ class PushNotificationService {
   static StreamSubscription<RemoteMessage>? _foregroundMessageSubscription;
   static StreamSubscription<RemoteMessage>? _messageOpenedSubscription;
   static bool _initialized = false;
+  static RemoteMessage? _pendingNavigationMessage;
+  static bool _navigationScheduled = false;
 
   static void registerBackgroundHandler() {
     FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
@@ -61,13 +63,14 @@ class PushNotificationService {
 
     final initialMessage = await messaging.getInitialMessage();
     if (initialMessage != null) {
-      _handleMessageNavigation(initialMessage);
+      await _handleMessageNavigation(initialMessage);
     }
 
     _authSubscription = Supabase.instance.client.auth.onAuthStateChange.listen((
       _,
     ) {
       unawaited(_registerCurrentToken());
+      _schedulePendingNavigation();
     });
   }
 
@@ -110,6 +113,36 @@ class PushNotificationService {
         destination == 'love_pills' || message.data['type'] == 'love_pill';
     if (destination != 'coupled' && !isLovePill) return;
 
+    _pendingNavigationMessage = message;
+    _schedulePendingNavigation();
+  }
+
+  static void _schedulePendingNavigation() {
+    if (_pendingNavigationMessage == null || _navigationScheduled) return;
+    _navigationScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _navigationScheduled = false;
+      unawaited(_openPendingNavigation());
+    });
+  }
+
+  static Future<void> _openPendingNavigation() async {
+    final message = _pendingNavigationMessage;
+    if (message == null) return;
+
+    final navigator = _navigatorKey?.currentState;
+    if (navigator == null) {
+      _schedulePendingNavigation();
+      return;
+    }
+    if (Supabase.instance.client.auth.currentSession == null) {
+      return;
+    }
+
+    final destination = message.data['destination'];
+    final isLovePill =
+        destination == 'love_pills' || message.data['type'] == 'love_pill';
+
     Widget page = const CoupledRequestPage();
     if (isLovePill) {
       final repo = CoupleRepository(Supabase.instance.client);
@@ -120,9 +153,8 @@ class PushNotificationService {
       }
     }
 
-    final navigator = _navigatorKey?.currentState;
-    if (navigator == null) return;
-
+    if (!identical(_pendingNavigationMessage, message)) return;
+    _pendingNavigationMessage = null;
     navigator.push(MaterialPageRoute(builder: (_) => page));
   }
 
@@ -131,6 +163,8 @@ class PushNotificationService {
     await _tokenRefreshSubscription?.cancel();
     await _foregroundMessageSubscription?.cancel();
     await _messageOpenedSubscription?.cancel();
+    _pendingNavigationMessage = null;
+    _navigationScheduled = false;
     _initialized = false;
   }
 }

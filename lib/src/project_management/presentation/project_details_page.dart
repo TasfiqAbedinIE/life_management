@@ -53,23 +53,37 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage>
   void _reloadAll() {
     _projectFuture = widget.repository.getProjectDetails(widget.projectId);
     _membersFuture = widget.repository.getProjectMembers(widget.projectId);
-    _tasksFuture = widget.repository.getProjectTasks(projectId: widget.projectId);
+    _tasksFuture = widget.repository.getProjectTasks(
+      projectId: widget.projectId,
+    );
     _activityFuture = widget.repository.getActivityFeed(widget.projectId);
   }
 
   void _reloadTasksOnly() {
     if (!mounted) return;
-    setState(() => _tasksFuture = widget.repository.getProjectTasks(projectId: widget.projectId));
+    setState(
+      () => _tasksFuture = widget.repository.getProjectTasks(
+        projectId: widget.projectId,
+      ),
+    );
   }
 
   void _reloadActivityOnly() {
     if (!mounted) return;
-    setState(() => _activityFuture = widget.repository.getActivityFeed(widget.projectId));
+    setState(
+      () =>
+          _activityFuture = widget.repository.getActivityFeed(widget.projectId),
+    );
   }
 
   Future<void> _refresh() async {
     setState(_reloadAll);
-    await Future.wait([_projectFuture, _membersFuture, _tasksFuture, _activityFuture]);
+    await Future.wait([
+      _projectFuture,
+      _membersFuture,
+      _tasksFuture,
+      _activityFuture,
+    ]);
   }
 
   @override
@@ -109,10 +123,8 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage>
       context: context,
       isScrollControlled: true,
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      builder: (_) => ProjectEditorSheet(
-        repository: widget.repository,
-        project: project,
-      ),
+      builder: (_) =>
+          ProjectEditorSheet(repository: widget.repository, project: project),
     );
     if (changed == true) {
       await _refresh();
@@ -130,9 +142,9 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage>
       await _refresh();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     }
   }
 
@@ -143,9 +155,9 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage>
       await _refresh();
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     }
   }
 
@@ -156,9 +168,9 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage>
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     }
   }
 
@@ -187,19 +199,19 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage>
       Navigator.of(context).pop(true);
     } catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error.toString())));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF7F4EF),
+      backgroundColor: AppPalette.background(context),
       appBar: AppBar(
-        backgroundColor: const Color(0xFFF7F4EF),
-        title: const Text('Project Workspace'),
+        backgroundColor: AppPalette.background(context),
+        title: const Text('Project Details'),
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
@@ -211,17 +223,20 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage>
             }
             if (projectSnapshot.hasError || !projectSnapshot.hasData) {
               return ListView(
-                children: [Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(projectSnapshot.error.toString()),
-                )],
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(projectSnapshot.error.toString()),
+                  ),
+                ],
               );
             }
             final project = projectSnapshot.data!;
             return FutureBuilder<List<ProjectMemberModel>>(
               future: _membersFuture,
               builder: (context, memberSnapshot) {
-                final members = memberSnapshot.data ?? const <ProjectMemberModel>[];
+                final members =
+                    memberSnapshot.data ?? const <ProjectMemberModel>[];
                 return _ProjectDetailsBody(
                   project: project,
                   members: members,
@@ -233,7 +248,8 @@ class _ProjectDetailsPageState extends State<ProjectDetailsPage>
                   onEditProject: () => _openProjectEditor(project),
                   onArchiveProject: () => _archiveProject(project),
                   onDeleteProject: () => _deleteProject(project),
-                  onEditTask: (task) => _openTaskEditor(task: task, members: members),
+                  onEditTask: (task) =>
+                      _openTaskEditor(task: task, members: members),
                   onCreateTask: () => _openTaskEditor(members: members),
                   onOpenTask: (task) async {
                     final changed = await Navigator.of(context).push<bool>(
@@ -307,7 +323,8 @@ class _ProjectDetailsBody extends StatelessWidget {
   final VoidCallback onCreateTask;
   final Future<void> Function(TaskModel task) onOpenTask;
   final Future<void> Function(TaskModel task) onDeleteTask;
-  final Future<void> Function(TaskModel task, TaskStatus status) onQuickStatusChange;
+  final Future<void> Function(TaskModel task, TaskStatus status)
+  onQuickStatusChange;
 
   @override
   Widget build(BuildContext context) {
@@ -329,7 +346,10 @@ class _ProjectDetailsBody extends StatelessWidget {
                   Expanded(
                     child: Text(
                       project.name,
-                      style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w800),
+                      style: const TextStyle(
+                        fontSize: 30,
+                        fontWeight: FontWeight.w800,
+                      ),
                     ),
                   ),
                   PopupMenuButton<String>(
@@ -348,14 +368,22 @@ class _ProjectDetailsBody extends StatelessWidget {
                     },
                     itemBuilder: (_) => const [
                       PopupMenuItem(value: 'edit', child: Text('Edit Project')),
-                      PopupMenuItem(value: 'archive', child: Text('Archive Project')),
-                      PopupMenuItem(value: 'delete', child: Text('Delete Project')),
+                      PopupMenuItem(
+                        value: 'archive',
+                        child: Text('Archive Project'),
+                      ),
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Text('Delete Project'),
+                      ),
                     ],
                   ),
                 ],
               ),
               Text(
-                project.description.isEmpty ? 'No description yet.' : project.description,
+                project.description.isEmpty
+                    ? 'No description yet.'
+                    : project.description,
                 style: TextStyle(color: AppPalette.mutedText(context)),
               ),
               const SizedBox(height: 14),
@@ -363,19 +391,84 @@ class _ProjectDetailsBody extends StatelessWidget {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
-                  _InfoTag(label: formatStatusLabel(project.status), color: projectStatusColor(project.status), darkText: false),
-                  _InfoTag(label: 'Start ${formatShortDate(project.startDate)}', color: const Color(0xFFF0F1F4), darkText: true),
-                  _InfoTag(label: 'Due ${formatShortDate(project.targetEndDate)}', color: const Color(0xFFF0F1F4), darkText: true),
+                  _InfoTag(
+                    label: formatStatusLabel(project.status),
+                    color: projectStatusColor(project.status),
+                    darkText: false,
+                  ),
+                  _InfoTag(
+                    label: 'Start ${formatShortDate(project.startDate)}',
+                    color: const Color(0xFFF0F1F4),
+                    darkText: true,
+                  ),
+                  _InfoTag(
+                    label: 'Due ${formatShortDate(project.targetEndDate)}',
+                    color: const Color(0xFFF0F1F4),
+                    darkText: true,
+                  ),
                 ],
               ),
               const SizedBox(height: 14),
               Row(
                 children: [
-                  Expanded(child: _MetricBox(value: '${summary?.inProgressTasks ?? 0}', label: 'In Progress', color: const Color(0xFF8E86FF))),
+                  Expanded(
+                    child: _MetricBox(
+                      value: '${summary?.inProgressTasks ?? 0}',
+                      label: 'In Progress',
+                      color: const Color(0xFF8E86FF),
+                    ),
+                  ),
                   const SizedBox(width: 10),
-                  Expanded(child: _MetricBox(value: '${summary?.reviewTasks ?? 0}', label: 'Review', color: const Color(0xFFFF8D6B))),
+                  Expanded(
+                    child: _MetricBox(
+                      value: '${summary?.reviewTasks ?? 0}',
+                      label: 'Review',
+                      color: const Color(0xFFFF8D6B),
+                    ),
+                  ),
                   const SizedBox(width: 10),
-                  Expanded(child: _MetricBox(value: '${summary?.doneTasks ?? 0}', label: 'Done', color: const Color(0xFF24C49C))),
+                  Expanded(
+                    child: _MetricBox(
+                      value: '${summary?.doneTasks ?? 0}',
+                      label: 'Done',
+                      color: const Color(0xFF24C49C),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Project members',
+                          style: TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        const SizedBox(height: 9),
+                        _ProjectMemberPreview(members: members),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 13,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF7557F7).withValues(alpha: .12),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      '${members.length} ${members.length == 1 ? 'member' : 'members'}',
+                      style: const TextStyle(
+                        color: Color(0xFF7557F7),
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                  ),
                 ],
               ),
             ],
@@ -387,19 +480,32 @@ class _ProjectDetailsBody extends StatelessWidget {
           child: Row(
             children: [null, ...TaskStatus.values].map((status) {
               final selected = filter == status;
-              final label = status == null ? 'All' : formatTaskStatusLabel(status);
+              final label = status == null
+                  ? 'All'
+                  : formatTaskStatusLabel(status);
               return Padding(
                 padding: const EdgeInsets.only(right: 10),
                 child: InkWell(
                   onTap: () => onFilterChanged(status),
                   borderRadius: BorderRadius.circular(999),
                   child: Ink(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: selected ? const Color(0xFF171717) : Colors.white,
                       borderRadius: BorderRadius.circular(999),
                     ),
-                    child: Text(label, style: TextStyle(color: selected ? Colors.white : const Color(0xFF444444), fontWeight: FontWeight.w700)),
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        color: selected
+                            ? Colors.white
+                            : const Color(0xFF444444),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -411,11 +517,19 @@ class _ProjectDetailsBody extends StatelessWidget {
           height: 44,
           child: TabBar(
             controller: tabController,
-            indicator: BoxDecoration(color: const Color(0xFF171717), borderRadius: BorderRadius.circular(999)),
+            indicator: BoxDecoration(
+              color: const Color(0xFF171717),
+              borderRadius: BorderRadius.circular(999),
+            ),
             labelColor: Colors.white,
             unselectedLabelColor: const Color(0xFF5B5B5B),
             dividerColor: Colors.transparent,
-            tabs: const [Tab(text: 'List'), Tab(text: 'Board'), Tab(text: 'Calendar'), Tab(text: 'Members')],
+            tabs: const [
+              Tab(text: 'List'),
+              Tab(text: 'Board'),
+              Tab(text: 'Calendar'),
+              Tab(text: 'Members'),
+            ],
           ),
         ),
         const SizedBox(height: 16),
@@ -424,10 +538,22 @@ class _ProjectDetailsBody extends StatelessWidget {
           child: TabBarView(
             controller: tabController,
             children: [
-              _TaskListTab(tasksFuture: tasksFuture, filter: filter, members: members, onEditTask: onEditTask, onOpenTask: onOpenTask, onDeleteTask: onDeleteTask, onQuickStatusChange: onQuickStatusChange),
+              _TaskListTab(
+                tasksFuture: tasksFuture,
+                filter: filter,
+                members: members,
+                onEditTask: onEditTask,
+                onOpenTask: onOpenTask,
+                onDeleteTask: onDeleteTask,
+                onQuickStatusChange: onQuickStatusChange,
+              ),
               _BoardTab(tasksFuture: tasksFuture, filter: filter),
               _CalendarTab(tasksFuture: tasksFuture, filter: filter),
-              _MembersTab(members: members, activityFuture: activityFuture, onCreateTask: onCreateTask),
+              _MembersTab(
+                members: members,
+                activityFuture: activityFuture,
+                onCreateTask: onCreateTask,
+              ),
             ],
           ),
         ),
@@ -436,8 +562,73 @@ class _ProjectDetailsBody extends StatelessWidget {
   }
 }
 
+class _ProjectMemberPreview extends StatelessWidget {
+  const _ProjectMemberPreview({required this.members});
+
+  final List<ProjectMemberModel> members;
+
+  @override
+  Widget build(BuildContext context) {
+    if (members.isEmpty) {
+      return Text(
+        'No members yet',
+        style: TextStyle(color: AppPalette.mutedText(context)),
+      );
+    }
+    final visible = members.take(5).toList();
+    return SizedBox(
+      height: 38,
+      child: Stack(
+        children: [
+          for (var index = 0; index < visible.length; index++)
+            Positioned(
+              left: index * 27,
+              child: Tooltip(
+                message:
+                    '${visible[index].profile?.displayName ?? 'Member'} · ${visible[index].role.name}',
+                child: CircleAvatar(
+                  radius: 19,
+                  backgroundColor: const Color(0xFF7557F7),
+                  foregroundColor: Colors.white,
+                  child: Text(
+                    _memberInitial(visible[index]),
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+            ),
+          if (members.length > visible.length)
+            Positioned(
+              left: visible.length * 27,
+              child: CircleAvatar(
+                radius: 19,
+                backgroundColor: AppPalette.surfaceAlt(context),
+                child: Text(
+                  '+${members.length - visible.length}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _memberInitial(ProjectMemberModel member) {
+    final value = member.profile?.displayName.trim() ?? '';
+    return value.isEmpty ? 'U' : value.substring(0, 1).toUpperCase();
+  }
+}
+
 class _MetricBox extends StatelessWidget {
-  const _MetricBox({required this.value, required this.label, required this.color});
+  const _MetricBox({
+    required this.value,
+    required this.label,
+    required this.color,
+  });
   final String value;
   final String label;
   final Color color;
@@ -445,17 +636,30 @@ class _MetricBox extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.14), borderRadius: BorderRadius.circular(22)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(value, style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
-        Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
-      ]),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(22),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            value,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
+          ),
+          Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 }
 
 class _InfoTag extends StatelessWidget {
-  const _InfoTag({required this.label, required this.color, required this.darkText});
+  const _InfoTag({
+    required this.label,
+    required this.color,
+    required this.darkText,
+  });
   final String label;
   final Color color;
   final bool darkText;
@@ -463,8 +667,17 @@ class _InfoTag extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(999)),
-      child: Text(label, style: TextStyle(color: darkText ? const Color(0xFF171717) : Colors.white, fontWeight: FontWeight.w700)),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: darkText ? const Color(0xFF171717) : Colors.white,
+          fontWeight: FontWeight.w700,
+        ),
+      ),
     );
   }
 }
@@ -486,7 +699,8 @@ class _TaskListTab extends StatelessWidget {
   final Future<void> Function(TaskModel task) onEditTask;
   final Future<void> Function(TaskModel task) onOpenTask;
   final Future<void> Function(TaskModel task) onDeleteTask;
-  final Future<void> Function(TaskModel task, TaskStatus status) onQuickStatusChange;
+  final Future<void> Function(TaskModel task, TaskStatus status)
+  onQuickStatusChange;
 
   @override
   Widget build(BuildContext context) {
@@ -501,89 +715,164 @@ class _TaskListTab extends StatelessWidget {
           separatorBuilder: (_, _) => const SizedBox(height: 12),
           itemBuilder: (context, index) {
             final task = tasks[index];
-            final member = members.where((m) => m.userId == task.assigneeId).firstOrNull;
+            final member = members
+                .where((m) => m.userId == task.assigneeId)
+                .firstOrNull;
             return InkWell(
               onTap: () => onOpenTask(task),
               borderRadius: BorderRadius.circular(26),
               child: Ink(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: task.status == TaskStatus.done ? const Color(0xFF5DD56F) : Colors.white,
+                  color: task.status == TaskStatus.done
+                      ? const Color(0xFF5DD56F)
+                      : Colors.white,
                   borderRadius: BorderRadius.circular(26),
                 ),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Expanded(child: Text(task.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800))),
-                    PopupMenuButton<String>(
-                      onSelected: (value) {
-                        switch (value) {
-                          case 'edit':
-                            onEditTask(task);
-                            break;
-                          case 'todo':
-                            onQuickStatusChange(task, TaskStatus.todo);
-                            break;
-                          case 'in_progress':
-                            onQuickStatusChange(task, TaskStatus.inProgress);
-                            break;
-                          case 'review':
-                            onQuickStatusChange(task, TaskStatus.review);
-                            break;
-                          case 'done':
-                            onQuickStatusChange(task, TaskStatus.done);
-                            break;
-                          case 'delete':
-                            onDeleteTask(task);
-                            break;
-                        }
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(value: 'edit', child: Text('Edit Task')),
-                        PopupMenuItem(value: 'todo', child: Text('Move to To Do')),
-                        PopupMenuItem(value: 'in_progress', child: Text('Move to In Progress')),
-                        PopupMenuItem(value: 'review', child: Text('Move to Review')),
-                        PopupMenuItem(value: 'done', child: Text('Move to Done')),
-                        PopupMenuItem(value: 'delete', child: Text('Delete Task')),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            task.title,
+                            style: const TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
+                        ),
+                        PopupMenuButton<String>(
+                          onSelected: (value) {
+                            switch (value) {
+                              case 'edit':
+                                onEditTask(task);
+                                break;
+                              case 'todo':
+                                onQuickStatusChange(task, TaskStatus.todo);
+                                break;
+                              case 'in_progress':
+                                onQuickStatusChange(
+                                  task,
+                                  TaskStatus.inProgress,
+                                );
+                                break;
+                              case 'review':
+                                onQuickStatusChange(task, TaskStatus.review);
+                                break;
+                              case 'done':
+                                onQuickStatusChange(task, TaskStatus.done);
+                                break;
+                              case 'delete':
+                                onDeleteTask(task);
+                                break;
+                            }
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(
+                              value: 'edit',
+                              child: Text('Edit Task'),
+                            ),
+                            PopupMenuItem(
+                              value: 'todo',
+                              child: Text('Move to To Do'),
+                            ),
+                            PopupMenuItem(
+                              value: 'in_progress',
+                              child: Text('Move to In Progress'),
+                            ),
+                            PopupMenuItem(
+                              value: 'review',
+                              child: Text('Move to Review'),
+                            ),
+                            PopupMenuItem(
+                              value: 'done',
+                              child: Text('Move to Done'),
+                            ),
+                            PopupMenuItem(
+                              value: 'delete',
+                              child: Text('Delete Task'),
+                            ),
+                          ],
+                        ),
                       ],
                     ),
-                  ]),
-                  Text(task.description.isEmpty ? 'No task description yet.' : task.description, maxLines: 2, overflow: TextOverflow.ellipsis),
-                  const SizedBox(height: 12),
-                  Wrap(spacing: 8, runSpacing: 8, children: [
-                    _InfoTag(label: task.priority.name.toUpperCase(), color: taskPriorityColor(task.priority), darkText: true),
-                    _InfoTag(label: formatTaskStatusLabel(task.status), color: taskStatusColor(task.status), darkText: task.status != TaskStatus.done),
-                    if (task.isOverdue) const _InfoTag(label: 'Overdue', color: Color(0xFFFF8D6B), darkText: false),
-                  ]),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    const Icon(Icons.calendar_today_rounded, size: 15),
-                    const SizedBox(width: 6),
-                    Text(formatShortDate(task.dueDate)),
-                    const Spacer(),
-                    if (member != null)
-                      CircleAvatar(
-                        radius: 15,
-                        backgroundColor: const Color(0xFFEFE9DF),
-                        child: Text(member.profile?.displayName.substring(0, 1).toUpperCase() ?? 'U'),
-                      ),
-                  ]),
-                  const SizedBox(height: 12),
-                  Row(children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(999),
-                        child: LinearProgressIndicator(
-                          value: (task.progressPercent / 100).clamp(0.0, 1.0),
-                          minHeight: 10,
-                          backgroundColor: Colors.black.withValues(alpha: 0.07),
-                          color: const Color(0xFF24C49C),
-                        ),
-                      ),
+                    Text(
+                      task.description.isEmpty
+                          ? 'No task description yet.'
+                          : task.description,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(width: 12),
-                    Text('${task.progressPercent}%'),
-                  ]),
-                ]),
+                    const SizedBox(height: 12),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        _InfoTag(
+                          label: task.priority.name.toUpperCase(),
+                          color: taskPriorityColor(task.priority),
+                          darkText: true,
+                        ),
+                        _InfoTag(
+                          label: formatTaskStatusLabel(task.status),
+                          color: taskStatusColor(task.status),
+                          darkText: task.status != TaskStatus.done,
+                        ),
+                        if (task.isOverdue)
+                          const _InfoTag(
+                            label: 'Overdue',
+                            color: Color(0xFFFF8D6B),
+                            darkText: false,
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Icon(Icons.calendar_today_rounded, size: 15),
+                        const SizedBox(width: 6),
+                        Text(formatShortDate(task.dueDate)),
+                        const Spacer(),
+                        if (member != null)
+                          CircleAvatar(
+                            radius: 15,
+                            backgroundColor: const Color(0xFFEFE9DF),
+                            child: Text(
+                              member.profile?.displayName
+                                      .substring(0, 1)
+                                      .toUpperCase() ??
+                                  'U',
+                            ),
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(999),
+                            child: LinearProgressIndicator(
+                              value: (task.progressPercent / 100).clamp(
+                                0.0,
+                                1.0,
+                              ),
+                              minHeight: 10,
+                              backgroundColor: Colors.black.withValues(
+                                alpha: 0.07,
+                              ),
+                              color: const Color(0xFF24C49C),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Text('${task.progressPercent}%'),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             );
           },
@@ -607,38 +896,64 @@ class _BoardTab extends StatelessWidget {
         return ListView(
           scrollDirection: Axis.horizontal,
           children: statuses.map((status) {
-            final columnTasks = tasks.where((task) => task.status == status).toList();
+            final columnTasks = tasks
+                .where((task) => task.status == status)
+                .toList();
             return Container(
               width: 290,
               margin: const EdgeInsets.only(right: 14),
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(28)),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(formatTaskStatusLabel(status), style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 10),
-                Expanded(
-                  child: ListView.separated(
-                    itemCount: columnTasks.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (context, index) {
-                      final task = columnTasks[index];
-                      return Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: status == TaskStatus.done ? const Color(0xFF5DD56F) : const Color(0xFFF7F4EF),
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(task.title, style: const TextStyle(fontWeight: FontWeight.w800)),
-                          const SizedBox(height: 6),
-                          Text('Priority ${task.priority.name}'),
-                          Text('Order ${task.orderIndex?.toStringAsFixed(0) ?? '-'}'),
-                        ]),
-                      );
-                    },
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    formatTaskStatusLabel(status),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
-                ),
-              ]),
+                  const SizedBox(height: 10),
+                  Expanded(
+                    child: ListView.separated(
+                      itemCount: columnTasks.length,
+                      separatorBuilder: (_, _) => const SizedBox(height: 10),
+                      itemBuilder: (context, index) {
+                        final task = columnTasks[index];
+                        return Container(
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: status == TaskStatus.done
+                                ? const Color(0xFF5DD56F)
+                                : const Color(0xFFF7F4EF),
+                            borderRadius: BorderRadius.circular(22),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                task.title,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              Text('Priority ${task.priority.name}'),
+                              Text(
+                                'Order ${task.orderIndex?.toStringAsFixed(0) ?? '-'}',
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
             );
           }).toList(),
         );
@@ -667,29 +982,52 @@ class _CalendarTab extends StatelessWidget {
             final task = tasks[index];
             return Container(
               padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(26)),
-              child: Row(children: [
-                Container(
-                  width: 58,
-                  height: 58,
-                  decoration: BoxDecoration(
-                    color: taskStatusColor(task.status).withValues(alpha: 0.18),
-                    borderRadius: BorderRadius.circular(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(26),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 58,
+                    height: 58,
+                    decoration: BoxDecoration(
+                      color: taskStatusColor(
+                        task.status,
+                      ).withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Center(
+                      child: Text(
+                        task.dueDate?.day.toString() ?? '--',
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
                   ),
-                  child: Center(
-                    child: Text(task.dueDate?.day.toString() ?? '--', style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w800)),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          task.title,
+                          style: const TextStyle(fontWeight: FontWeight.w800),
+                        ),
+                        Text('Start ${formatShortDate(task.startDate)}'),
+                        Text('Due ${formatShortDate(task.dueDate)}'),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(task.title, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    Text('Start ${formatShortDate(task.startDate)}'),
-                    Text('Due ${formatShortDate(task.dueDate)}'),
-                  ]),
-                ),
-                _InfoTag(label: formatTaskStatusLabel(task.status), color: taskStatusColor(task.status), darkText: task.status != TaskStatus.done),
-              ]),
+                  _InfoTag(
+                    label: formatTaskStatusLabel(task.status),
+                    color: taskStatusColor(task.status),
+                    darkText: task.status != TaskStatus.done,
+                  ),
+                ],
+              ),
             );
           },
         );
@@ -720,45 +1058,84 @@ class _MembersTab extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 12),
-        ...members.map((member) => Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24)),
-              child: Row(children: [
+        ...members.map(
+          (member) => Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(24),
+            ),
+            child: Row(
+              children: [
                 CircleAvatar(
                   radius: 22,
                   backgroundColor: const Color(0xFFEFE9DF),
-                  child: Text(member.profile?.displayName.substring(0, 1).toUpperCase() ?? 'U'),
+                  child: Text(
+                    member.profile?.displayName.substring(0, 1).toUpperCase() ??
+                        'U',
+                  ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    Text(member.profile?.displayName ?? member.userId, style: const TextStyle(fontWeight: FontWeight.w800)),
-                    Text(member.profile?.email ?? ''),
-                  ]),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        member.profile?.displayName ?? member.userId,
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      Text(member.profile?.email ?? ''),
+                    ],
+                  ),
                 ),
                 Text(member.role.name),
-              ]),
-            )),
+              ],
+            ),
+          ),
+        ),
         const SizedBox(height: 6),
-        const Text('Recent Activity', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+        const Text(
+          'Recent Activity',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+        ),
         const SizedBox(height: 10),
         FutureBuilder<List<ActivityLogModel>>(
           future: activityFuture,
           builder: (context, snapshot) {
             final items = snapshot.data ?? const <ActivityLogModel>[];
             return Column(
-              children: items.take(8).map((item) => Container(
-                margin: const EdgeInsets.only(bottom: 10),
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22)),
-                child: Row(children: [
-                  const Icon(Icons.bolt_rounded, color: Color(0xFFFF6A3D)),
-                  const SizedBox(width: 10),
-                  Expanded(child: Text(item.actionType.replaceAll('_', ' '))),
-                  Text(formatShortDate(item.createdAt), style: TextStyle(color: AppPalette.mutedText(context))),
-                ]),
-              )).toList(),
+              children: items
+                  .take(8)
+                  .map(
+                    (item) => Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(22),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.bolt_rounded,
+                            color: Color(0xFFFF6A3D),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(item.actionType.replaceAll('_', ' ')),
+                          ),
+                          Text(
+                            formatShortDate(item.createdAt),
+                            style: TextStyle(
+                              color: AppPalette.mutedText(context),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                  .toList(),
             );
           },
         ),
